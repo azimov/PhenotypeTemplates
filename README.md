@@ -88,14 +88,17 @@ pheno_template/
 ├── pyproject.toml
 ├── pheno_tpl/
 │   ├── __init__.py
-│   ├── concept_sets.py           # Capr cs()/descendants() + overlap resolution
-│   ├── criteria.py               # criterion builders -> CircePy models
-│   ├── templates.py              # TemplateSpecs + full CohortExpression builder
-│   ├── family.py                 # wires specs -> resolved family
-│   ├── setops.py                 # set algebra over (person_id, event_id) keys
-│   └── executor.py               # TemplateFamilyExecutor (the fast path)
+│   ├── backend.py                 # connect_backend(): DuckDB / Databricks
+│   ├── concept_sets.py            # Capr cs()/descendants() + overlap resolution
+│   ├── criteria.py                # criterion builders -> CircePy models
+│   ├── templates.py               # TemplateSpecs + full CohortExpression builder
+│   ├── family.py                  # wires specs -> resolved family
+│   ├── setops.py                  # set algebra over (person_id, event_id) keys
+│   └── executor.py                # TemplateFamilyExecutor (the fast path)
 ├── examples/
-│   └── afib_eunomia.py           # full AFib family on the Eunomia CDM
+│   ├── afib_eunomia.py            # full AFib family on the Eunomia CDM
+│   └── run_phenotype.py           # CLI: run the templating on DuckDB/Databricks
+├── pheno_tpl_db_config.yaml.example
 └── tests/
     ├── conftest.py               # deterministic in-memory DuckDB CDM fixture
     ├── test_parity.py            # fast path == per-template build_cohort
@@ -108,6 +111,7 @@ pheno_template/
 
 | Module | Purpose |
 |---|---|
+| `backend.py` | `connect_backend("duckdb"\|"databricks")` → `BackendConnection` (schema config, YAML/env expansion, Databricks wiring) |
 | `concept_sets.py` | `cs()`/`descendants()` builder producing `ConceptSet` models, plus `resolve_concept_set_overlaps()` replicating the R precedence rules (`I` beats `S/C/A`, `A` beats `S/C`, `S↔C` overlap allowed, `D/T` untouched) |
 | `criteria.py` | Builders for the index entry, multi-domain criterion groups, the `F` follow-up group, the `A` exclusion group, windows, end strategies and collapse settings — emitting CircePy models with 1:1 Capr semantics |
 | `templates.py` | The 23 `TemplateSpec`s and `build_template_expression()` producing a full, standalone `CohortExpression` per template |
@@ -134,8 +138,7 @@ pip install -e ".[databricks]"              # optional, for Databricks
 ## Quick start
 
 ```python
-import ibis
-from pheno_tpl import FamilySpec, TemplateFamilyExecutor, cs, resolve_family
+from pheno_tpl import FamilySpec, TemplateFamilyExecutor, connect_backend, cs, resolve_family
 
 # 1. Concept sets (Capr-style; descendants expand against the backend vocabulary)
 spec = FamilySpec(
@@ -152,13 +155,14 @@ spec = FamilySpec(
 # 2. Resolve overlaps, build concept sets, atomic groups and expressions
 resolved = resolve_family(spec)
 
-# 3. Execute: index + populations computed once; 23 templates as set algebra
-backend = ibis.duckdb.connect("eunomia.duckdb")   # or ibis.databricks.connect(...)
+# 3. Connect (DuckDB or Databricks) and execute: index + populations once,
+#    23 templates as set algebra
+conn = connect_backend("duckdb")            # or connect_backend("databricks")
 executor = TemplateFamilyExecutor(
-    backend,
-    cdm_schema="main",
-    results_schema="results",       # scratch/intermediate + cohort table schema
-    vocabulary_schema=None,         # defaults to cdm_schema
+    conn.backend,
+    cdm_schema=conn.cdm_schema,
+    results_schema=conn.results_schema,     # scratch/intermediate + cohort table schema
+    vocabulary_schema=conn.vocabulary_schema,
 )
 relations = executor.run_resolved(resolved, materialize_intermediates=True)
 # -> {name: ibis relation} for base_case, tpl_1, ..., tpl_22
@@ -203,6 +207,39 @@ Builds the Atrial Fibrillation family (the actual concept sets from
 `r_template.R`) against the GiBleed Eunomia CDM, prints per-template counts, and
 writes a single `afib_phe_tpl_cohort` table. A writable copy of the Eunomia DB
 is used so the shared file is never mutated.
+
+## Running on DuckDB / Databricks
+
+`examples/run_phenotype.py` runs the templating family (the same code path as
+the quick start) using the shared connection helpers in `pheno_tpl.backend`:
+
+```bash
+python examples/run_phenotype.py                        # DuckDB (stages Eunomia)
+python examples/run_phenotype.py --backend databricks   # Databricks
+python examples/run_phenotype.py --concept-sets my.json # custom concept sets
+python examples/run_phenotype.py --no-materialize       # skip scratch tables
+```
+
+It connects, resolves the family, executes all 23 templates (index events and
+inclusion populations computed once), writes a single OHDSI cohort table keyed
+by `cohort_definition_id`, and prints per-template counts.
+
+**Databricks configuration** — `connect_backend("databricks")` reads
+`pheno_tpl_db_config.yaml` (copy `pheno_tpl_db_config.yaml.example`) or the env
+vars:
+
+```bash
+export DATABRICKS_HOST=...            # https://<workspace>.cloud.databricks.com
+export DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/<id>
+export DATABRICKS_TOKEN=...
+export DATABRICKS_CDM_SCHEMA=catalog.schema
+export DATABRICKS_RESULTS_SCHEMA=...  # schema for scratch tables + cohort table
+```
+
+Requires `pip install -e ".[databricks]"` (ibis Databricks driver). The executor
+applies the Databricks post-connect workaround, materializes the shared
+populations to scratch tables, and writes the 23 templates with a single
+`CREATE TABLE … OVERWRITE`.
 
 ## Tests
 

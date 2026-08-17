@@ -1,5 +1,7 @@
 """pheno_tpl: efficient phenotyping-template cohorts on CircePy's Ibis executor."""
 
+from . import backend
+from .backend import BackendConnection, connect_backend
 from .concept_sets import (
     ConceptSetSpec,
     concept_ids,
@@ -26,17 +28,20 @@ from .templates import TEMPLATE_SPECS, TemplateSpec, build_all_expressions, buil
 
 __all__ = [
     "TEMPLATE_SPECS",
+    "BackendConnection",
     "BuiltFamily",
     "ConceptSetSpec",
     "FamilySpec",
     "ResolvedFamily",
     "TemplateFamilyExecutor",
     "TemplateSpec",
+    "backend",
     "build_all_expressions",
     "build_atomic_groups",
     "combine_criteria",
     "combine_key_sets",
     "concept_ids",
+    "connect_backend",
     "cs",
     "event_ends_window",
     "event_starts_window",

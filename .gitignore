@@ -7,3 +7,5 @@ venv/
 .ruff_cache/
 output/
 .phe_tpl_scratch/
+pheno_tpl_db_config.yaml
+eunomia.duckdb
