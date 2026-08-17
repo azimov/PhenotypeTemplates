@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pheno-tpl"
+version = "0.1.0"
+description = "Efficient phenotyping template cohorts via CircePy's Ibis execution layer"
+requires-python = ">=3.10"
+dependencies = [
+    "ohdsi-circe-python-alpha>=0.2.0",
+    "ibis-framework[duckdb]>=11.0.0",
+]
+
+[project.optional-dependencies]
+databricks = ["ibis-framework[databricks]>=11.0.0"]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+include = ["pheno_tpl*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
