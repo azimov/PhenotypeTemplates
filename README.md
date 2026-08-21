@@ -262,6 +262,51 @@ gold_standard:
   first: true
 ```
 
+## Diagnostics
+
+Beyond operating characteristics, `cpt diagnose` produces a **phenotype report**
+that interrogates and diagnoses issues in the cohort definition (CohortDiagnostics-
+inspired, scoped). It writes a markdown report plus a local DuckDB asset store of
+**aggregated** tables — never patient-level data (which stays on the CDM).
+
+```bash
+cpt diagnose --config config.yaml --output-dir out/
+```
+
+The diagnostics (all aggregated, fast — a few minutes on a real CDM):
+
+| Diagnostic | What it shows |
+|---|---|
+| Index event breakdown | which domain/concept/source-table actually trigger cohort entry |
+| Demographic characterization | per-template age/gender/race/ethnicity counts |
+| Visit context | visit type at index |
+| Time distribution | observation time before/after index (left-truncation / follow-up bias) |
+| Coverage & attrition | persons captured by each evidence category, and the per-template rule attrition ladder |
+| Concept-set prevalence | prevalence of each resolved concept (I/S/D/T/C/A), rolled up to parents; zero-prevalence = orphan concepts |
+| Template overlap | pairwise Jaccard between templates (fixed index → simple set algebra) |
+
+The `output_dir` contains:
+
+- `pheno_diagnostics.duckdb` — append-only store with a `runs` ledger and all
+  diagnostic tables tagged by `run_id` and `phenotype_id` (a SHA-256 checksum of
+  the base entry criteria), so successive runs of the same phenotype can be
+  compared as the definition evolves.
+- `<label>_diagnostics_<run_id>.md` — the human-readable report.
+
+Individual diagnostics can be toggled off in the config:
+
+```yaml
+diagnostics:
+  index_events: true
+  demographics: true
+  visit_context: true
+  time_distribution: true
+  coverage: true
+  attrition: true
+  concept_prevalence: true
+  overlap: true
+```
+
 ## Databricks notes
 
 - `TemplateFamilyExecutor` applies the Databricks post-connect workaround
@@ -298,6 +343,7 @@ PHENO_TPL_EUNOMIA=1 python -m pytest tests/test_eunomia_parity.py
 - `test_overlaps.py` — overlap-resolution rules.
 - `test_metrics.py` — pure confusion-matrix / metric / ranking tests.
 - `test_evaluation.py` — integration: population, demographics, invariants.
+- `test_diagnostics.py` — pure + integration: prevalence/orphans, breakdown, coverage, store.
 - `test_eunomia_parity.py` — opt-in (slow) parity on the real Eunomia CDM.
 
 On the GiBleed Eunomia data, the reference path (23 × `build_cohort`) takes

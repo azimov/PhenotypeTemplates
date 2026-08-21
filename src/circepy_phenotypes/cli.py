@@ -4,6 +4,7 @@ Subcommands:
 
   * ``run``        — generate the 23-template family into a single cohort table.
   * ``evaluate``   — evaluate candidate cohorts against a gold standard.
+  * ``diagnose``   — cohort-definition diagnostics (markdown + DuckDB asset).
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from pathlib import Path
 from .backend import connect_backend
 from .cohorts import TemplateFamilyExecutor, resolve_family
 from .config import load_config
+from .diagnostics import diagnose
 from .evaluation import evaluate
 from .evaluation.report import format_report, metrics_table, plot_metrics
 
@@ -93,6 +95,34 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_diagnose(args: argparse.Namespace) -> int:
+    if not args.config:
+        raise SystemExit("diagnose requires --config path/to/config.yaml")
+
+    config = load_config(args.config)
+    spec = config.build_family_spec()
+    resolved = resolve_family(spec)
+
+    conn = connect_backend(config.backend, duckdb_path=config.duckdb_path)
+
+    result = diagnose(
+        conn,
+        resolved,
+        output_dir=args.output_dir,
+        config=config.model_dump(mode="json"),
+        toggles=config.diagnostics.toggles(),
+        phenotype_label=config.phenotype_label,
+    )
+
+    print(f"phenotype_id : {result.phenotype_id}")
+    print(f"run_id       : {result.run_id}")
+    print(f"entry cohort : {len(result.template_persons.get('base_case', set()))} persons")
+    print(f"report       : {result.report_path}")
+    print(f"store        : {result.store_path}")
+    print(f"tables       : {', '.join(sorted(result.tables))}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="circepy-phenotypes",
@@ -115,6 +145,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--plot", type=Path, default=None, help="write a sensitivity/specificity plot"
     )
     eval_p.set_defaults(func=_cmd_evaluate)
+
+    diag_p = sub.add_parser("diagnose", help="cohort-definition diagnostics")
+    diag_p.add_argument("--config", type=Path, required=True, help="YAML/JSON config path")
+    diag_p.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="directory for the DuckDB asset store + markdown report",
+    )
+    diag_p.set_defaults(func=_cmd_diagnose)
 
     return parser
 

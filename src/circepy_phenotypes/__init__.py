@@ -45,6 +45,7 @@ from .cohorts import (
     union_keys,
     visit,
 )
+from .diagnostics import DiagnosticsResult, DiagnosticsStore, diagnose, phenotype_id
 from .evaluation import (
     ConfusionMatrix,
     EvaluationResult,
@@ -67,6 +68,8 @@ __all__ = [
     "BackendConnection",
     "BuiltFamily",
     "ConfusionMatrix",
+    "DiagnosticsResult",
+    "DiagnosticsStore",
     "EvaluationResult",
     "FamilySpec",
     "Metrics",
@@ -86,6 +89,7 @@ __all__ = [
     "connect_backend",
     "cs",
     "device_exposure",
+    "diagnose",
     "distinct_persons",
     "domain_criteria",
     "drug_exposure",
@@ -104,6 +108,7 @@ __all__ = [
     "make_multi_domain_criterion",
     "measurement",
     "observation",
+    "phenotype_id",
     "procedure",
     "rank_candidates",
     "remove_ids",

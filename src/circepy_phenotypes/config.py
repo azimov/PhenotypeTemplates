@@ -23,6 +23,7 @@ from .evaluation.population import domain_criteria
 
 __all__ = [
     "ConceptSetConfig",
+    "DiagnosticsConfig",
     "EvaluationConfig",
     "EvidenceEntry",
     "GoldStandardConfig",
@@ -98,6 +99,22 @@ class GoldStandardConfig(BaseModel):
         return gold_standard_expression(primary, concept_sets=concept_sets, name="gold standard")
 
 
+class DiagnosticsConfig(BaseModel):
+    """Toggle which diagnostics ``cpt diagnose`` computes (all on by default)."""
+
+    index_events: bool = True
+    demographics: bool = True
+    visit_context: bool = True
+    time_distribution: bool = True
+    coverage: bool = True
+    attrition: bool = True
+    concept_prevalence: bool = True
+    overlap: bool = True
+
+    def toggles(self) -> dict[str, bool]:
+        return self.model_dump()
+
+
 class EvaluationConfig(BaseModel):
     """Top-level evaluation configuration."""
 
@@ -111,6 +128,7 @@ class EvaluationConfig(BaseModel):
     target_population: TargetPopulationConfig = Field(default_factory=TargetPopulationConfig)
     universe: UniverseConfig = Field(default_factory=UniverseConfig)
     gold_standard: GoldStandardConfig | None = None
+    diagnostics: DiagnosticsConfig = Field(default_factory=DiagnosticsConfig)
 
     def build_family_spec(self) -> FamilySpec:
         def get(key: str):

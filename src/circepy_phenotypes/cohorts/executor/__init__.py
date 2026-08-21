@@ -173,15 +173,11 @@ class TemplateFamilyExecutor:
     # Per-template combination
     # ------------------------------------------------------------------
 
-    def template_relation(
-        self,
-        family: BuiltFamily,
-        spec: TemplateSpec,
-        *,
-        end_strategy=None,
-        collapse_settings=None,
-    ):
-        """Produce the final cohort rows (index events + end strategy + collapse)."""
+    def template_keys(self, family: BuiltFamily, spec: TemplateSpec):
+        """Return the included ``(person_id, event_id)`` key set for a template.
+
+        ``None`` means no inclusion constraint (the full index-event set).
+        """
         present = {label for label, keys in family.key_sets.items() if keys is not None}
         pre_combo = _effective_combo(spec.pre_combo, PRE_LABELS, present)
         post_combo = _effective_combo(spec.post_combo, POST_LABELS, present)
@@ -193,7 +189,18 @@ class TemplateFamilyExecutor:
         if spec.exclude_a and family.key_sets.get("A") is not None:
             constraints.append(family.key_sets["A"])
 
-        included = intersect_all(constraints)
+        return intersect_all(constraints)
+
+    def template_relation(
+        self,
+        family: BuiltFamily,
+        spec: TemplateSpec,
+        *,
+        end_strategy=None,
+        collapse_settings=None,
+    ):
+        """Produce the final cohort rows (index events + end strategy + collapse)."""
+        included = self.template_keys(family, spec)
 
         rows = family.index_events
         if included is not None:
@@ -252,6 +259,25 @@ class TemplateFamilyExecutor:
             )
         return results
 
+    def build_resolved(self, resolved, *, materialize_intermediates: bool = False):
+        """Build the shared artifacts for a :class:`ResolvedFamily`.
+
+        Returns a :class:`BuiltFamily` (index events + per-category key sets)
+        without producing the per-template cohort rows.
+        """
+        from ..criteria import make_collapse_settings, make_end_strategy
+
+        return self.build(
+            concept_sets=resolved.concept_sets,
+            index_codeset_id=resolved.codeset_ids["I"],
+            atomic=resolved.atomic,
+            end_strategy=make_end_strategy(resolved.exit_strategy),
+            collapse_settings=make_collapse_settings(resolved.era_days),
+            expression_limit=resolved.expression_limit,
+            primary_limit=resolved.primary_limit,
+            materialize_intermediates=materialize_intermediates,
+        )
+
     def run_resolved(self, resolved, *, materialize_intermediates: bool = False):
         """Run a :class:`~circepy_phenotypes.cohorts.family.ResolvedFamily` end to end.
 
@@ -260,17 +286,18 @@ class TemplateFamilyExecutor:
         """
         from ..criteria import make_collapse_settings, make_end_strategy
 
-        return self.run(
-            concept_sets=resolved.concept_sets,
-            index_codeset_id=resolved.codeset_ids["I"],
-            atomic=resolved.atomic,
-            specs=resolved.specs,
-            end_strategy=make_end_strategy(resolved.exit_strategy),
-            collapse_settings=make_collapse_settings(resolved.era_days),
-            expression_limit=resolved.expression_limit,
-            primary_limit=resolved.primary_limit,
-            materialize_intermediates=materialize_intermediates,
-        )
+        family = self.build_resolved(resolved, materialize_intermediates=materialize_intermediates)
+        normalized_end_strategy = normalize_end_strategy(make_end_strategy(resolved.exit_strategy))
+        collapse_settings = make_collapse_settings(resolved.era_days)
+        return {
+            spec.name: self.template_relation(
+                family,
+                spec,
+                end_strategy=normalized_end_strategy,
+                collapse_settings=collapse_settings,
+            )
+            for spec in resolved.specs
+        }
 
     # ------------------------------------------------------------------
     # Single OHDSI cohort table write
