@@ -17,7 +17,7 @@ dependencies = [
 [project.optional-dependencies]
 databricks = ["ibis-framework[databricks]>=11.0.0"]
 report = ["pandas", "matplotlib"]
-dev = ["pytest", "ruff"]
+dev = ["pytest", "ruff", "pre-commit"]
 
 [project.scripts]
 circepy-phenotypes = "circepy_phenotypes.cli:main"

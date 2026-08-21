@@ -71,9 +71,7 @@ class UniverseConfig(BaseModel):
     """Evaluation universe (sensitive population or entry cohort)."""
 
     type: Literal["sensitive_population", "entry_cohort"] = "sensitive_population"
-    evidence: list[EvidenceEntry] = Field(
-        default_factory=lambda: [EvidenceEntry(codeset_id=1)]
-    )
+    evidence: list[EvidenceEntry] = Field(default_factory=lambda: [EvidenceEntry(codeset_id=1)])
 
     def build_population(self, concept_sets: list[ConceptSet]) -> CohortExpression:
         primary = []

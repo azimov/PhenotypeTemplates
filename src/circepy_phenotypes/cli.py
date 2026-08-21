@@ -36,7 +36,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
     )
     relations = executor.run_resolved(resolved, materialize_intermediates=not args.no_materialize)
     cohort_table = args.cohort_table or conn.cohort_table
-    executor.write_cohort_table(relations, cohort_ids=resolved.cohort_ids, cohort_table=cohort_table)
+    executor.write_cohort_table(
+        relations, cohort_ids=resolved.cohort_ids, cohort_table=cohort_table
+    )
 
     print(f"\n{'template':<12}{'cohort_id':<10}{'persons':<8}{'rows'}")
     for name, relation in relations.items():
@@ -109,7 +111,9 @@ def build_parser() -> argparse.ArgumentParser:
     eval_p = sub.add_parser("evaluate", help="evaluate candidate cohorts vs a gold standard")
     eval_p.add_argument("--config", type=Path, required=True, help="YAML/JSON config path")
     eval_p.add_argument("--csv", type=Path, default=None, help="write metrics to CSV")
-    eval_p.add_argument("--plot", type=Path, default=None, help="write a sensitivity/specificity plot")
+    eval_p.add_argument(
+        "--plot", type=Path, default=None, help="write a sensitivity/specificity plot"
+    )
     eval_p.set_defaults(func=_cmd_evaluate)
 
     return parser

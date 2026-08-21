@@ -134,12 +134,13 @@ pheno_template/
 ## Install
 
 Requires the `develop` branch of `OHDSI/CircePy` (which ships
-`circe.execution`). The installed copy must be the pinned commit this package
-was developed against, because the fast path imports a few internal executor
-functions (isolated behind `cohorts/executor/_engine.py`).
+`circe.execution`, including the sqlrender functionality this package's fast
+path depends on). Install CircePy from the `develop` branch, e.g.:
 
 ```bash
-# CircePy (in its own checkout):
+pip install "ohdsi-circe-python-alpha @ git+https://github.com/OHDSI/Circepy.git@develop"
+
+# or, from a local checkout of CircePy:
 uv sync --extra ibis-duckdb --extra dev      # or: pip install -e ".[ibis-duckdb]"
 
 # this package:
@@ -151,7 +152,13 @@ pip install -e ".[report]"                  # optional, pandas + matplotlib
 ## Quick start: generation
 
 ```python
-from circepy_phenotypes import FamilySpec, TemplateFamilyExecutor, connect_backend, cs, resolve_family
+from circepy_phenotypes import (
+    FamilySpec,
+    TemplateFamilyExecutor,
+    connect_backend,
+    cs,
+    resolve_family,
+)
 
 spec = FamilySpec(
     cs_I=cs((313217, 605092), name="Atrial fibrillation"),
@@ -161,12 +168,12 @@ spec = FamilySpec(
     cs_C=cs(descendants=(135360, 197320), name="AFib complications"),
     cs_A=cs(descendants=(313217, 317302), name="Alternative diagnoses"),
     phenotype_label="Atrial Fibrillation",
-    exit_strategy="chronic",       # "chronic" | "acute14d" | "acute365d"
+    exit_strategy="chronic",  # "chronic" | "acute14d" | "acute365d"
 )
 
 resolved = resolve_family(spec)
 
-conn = connect_backend("duckdb")            # or connect_backend("databricks")
+conn = connect_backend("duckdb")  # or connect_backend("databricks")
 executor = TemplateFamilyExecutor(
     conn.backend,
     cdm_schema=conn.cdm_schema,
@@ -185,8 +192,13 @@ executor.write_cohort_table(
 
 ```python
 from circepy_phenotypes import (
-    connect_backend, evaluate, evidence_expression,
-    build_demographic_group, resolve_family, cs, FamilySpec,
+    connect_backend,
+    evaluate,
+    evidence_expression,
+    build_demographic_group,
+    resolve_family,
+    cs,
+    FamilySpec,
 )
 
 resolved = resolve_family(FamilySpec(cs_I=cs((313217,), name="AFib"), phenotype_label="AFib"))
@@ -211,7 +223,7 @@ result = evaluate(
     population_expression=population,
     gold_standard=gold,
     demographic_group=male,
-    universe="sensitive_population",   # or "entry_cohort"
+    universe="sensitive_population",  # or "entry_cohort"
 )
 
 for name, metrics in result.metrics.items():
@@ -292,12 +304,23 @@ On the GiBleed Eunomia data, the reference path (23 × `build_cohort`) takes
 ~45 s while the materialized shared-execution path takes ~4 s for the same
 result.
 
+## Development
+
+CI (`.github/workflows/`) runs the test suite and `ruff check` /
+`ruff format --check` on every push and pull request. Ruff also runs locally
+as a git pre-commit hook:
+
+```bash
+pip install -e ".[dev]"   # installs pre-commit
+pre-commit install
+```
+
 ## Caveats & limitations
 
 - **Internal CircePy API coupling.** The fast path imports non-public
   `circe.execution` functions, isolated behind `cohorts/executor/_engine.py`.
-  Pin the CircePy commit you develop against; when the public execution facade
-  lands (CircePy > 0.3.0), reimplement `_engine.py` against it.
+  Track the CircePy `develop` branch you develop against; when the public
+  execution facade lands (CircePy > 0.3.0), reimplement `_engine.py` against it.
 - **Vocabulary tables required.** Concept-set descendant expansion reads
   `concept`, `concept_ancestor`, and `concept_relationship` on the backend.
 - **Branch note.** The `circe.execution` layer is on the `develop` branch of

@@ -125,9 +125,13 @@ def main() -> None:
     print(f"Backend   : {args.backend}")
 
     resolved = resolve_family(spec)
-    print(f"Templates : {len(resolved.expressions)} (base_case + {len(resolved.expressions) - 1} scenarios)")
+    print(
+        f"Templates : {len(resolved.expressions)} (base_case + {len(resolved.expressions) - 1} scenarios)"
+    )
 
-    conn = connect_backend(args.backend, duckdb_path=str(args.duckdb_path) if args.duckdb_path else None)
+    conn = connect_backend(
+        args.backend, duckdb_path=str(args.duckdb_path) if args.duckdb_path else None
+    )
     print(f"Connected : {conn.backend.name}")
 
     executor = TemplateFamilyExecutor(

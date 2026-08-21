@@ -77,7 +77,9 @@ def remove_ids(
     keep = [
         item
         for item in cs_obj.expression.items
-        if item.concept is None or item.concept.concept_id is None or int(item.concept.concept_id) not in remove
+        if item.concept is None
+        or item.concept.concept_id is None
+        or int(item.concept.concept_id) not in remove
     ]
     if not keep:
         if warn_on_overlap:

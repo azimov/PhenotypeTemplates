@@ -10,27 +10,27 @@ from circepy_phenotypes import FamilySpec, TemplateFamilyExecutor, cs, resolve_f
 
 EXPECTED_PERSONS = {
     "base_case": {1, 2, 3, 4},
-    "tpl_1": {1, 2},          # (S|D)
-    "tpl_2": {1, 2, 3, 4},    # (T|C|F) -- persons 2 & 4 have ER/Inpatient visits at index (F)
-    "tpl_3": {1, 2, 3, 4},    # F
-    "tpl_4": {1, 3},          # T
-    "tpl_5": {1, 2, 3},       # !A
-    "tpl_6": {1, 2},          # D
-    "tpl_7": {1, 2},          # (S|D)^!A
-    "tpl_8": {1, 2, 3},       # (T|C|F)^!A
-    "tpl_9": {1, 2},          # (S|D)^(T|C|F)
+    "tpl_1": {1, 2},  # (S|D)
+    "tpl_2": {1, 2, 3, 4},  # (T|C|F) -- persons 2 & 4 have ER/Inpatient visits at index (F)
+    "tpl_3": {1, 2, 3, 4},  # F
+    "tpl_4": {1, 3},  # T
+    "tpl_5": {1, 2, 3},  # !A
+    "tpl_6": {1, 2},  # D
+    "tpl_7": {1, 2},  # (S|D)^!A
+    "tpl_8": {1, 2, 3},  # (T|C|F)^!A
+    "tpl_9": {1, 2},  # (S|D)^(T|C|F)
     "tpl_10": {1, 2},
-    "tpl_11": {1, 2},         # (S^D)^(T|C|F)
+    "tpl_11": {1, 2},  # (S^D)^(T|C|F)
     "tpl_12": {1, 2},
-    "tpl_13": {1},            # (S|D)^(T^C^F)
+    "tpl_13": {1},  # (S|D)^(T^C^F)
     "tpl_14": {1},
-    "tpl_15": {1},            # (S^D)^(T^F)
-    "tpl_16": {1},            # (S^D)^(F^C)
-    "tpl_17": {1},            # (S^D)^(T^C)
+    "tpl_15": {1},  # (S^D)^(T^F)
+    "tpl_16": {1},  # (S^D)^(F^C)
+    "tpl_17": {1},  # (S^D)^(T^C)
     "tpl_18": {1},
     "tpl_19": {1},
     "tpl_20": {1},
-    "tpl_21": {1},            # (S^D)^(T^C^F)
+    "tpl_21": {1},  # (S^D)^(T^C^F)
     "tpl_22": {1},
 }
 
@@ -68,7 +68,9 @@ def test_decomposed_matches_reference(conn, materialize):
     executor = TemplateFamilyExecutor(conn, cdm_schema="main")
     fast = {
         name: _persons(rel)
-        for name, rel in executor.run_resolved(resolved, materialize_intermediates=materialize).items()
+        for name, rel in executor.run_resolved(
+            resolved, materialize_intermediates=materialize
+        ).items()
     }
 
     assert set(fast) == set(reference) == set(EXPECTED_PERSONS)
@@ -95,7 +97,9 @@ def test_write_single_cohort_table(conn):
     relations = executor.run_resolved(resolved)
 
     cohort_table = "phe_tpl_test_cohort"
-    executor.write_cohort_table(relations, cohort_ids=resolved.cohort_ids, cohort_table=cohort_table)
+    executor.write_cohort_table(
+        relations, cohort_ids=resolved.cohort_ids, cohort_table=cohort_table
+    )
 
     tbl = read_table(executor.backend, table_name=cohort_table, schema=None)
     df = tbl.execute()

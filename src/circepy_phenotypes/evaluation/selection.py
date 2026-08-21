@@ -42,6 +42,7 @@ def rank_candidates(
     Returns ``[(name, score), ...]`` sorted descending. ``NaN`` scores are
     pushed to the end (or the front if ``na_last=False``).
     """
+
     def sort_key(item: tuple[str, float]) -> tuple[int, int, float]:
         _name, value = item
         is_nan = math.isnan(value)
