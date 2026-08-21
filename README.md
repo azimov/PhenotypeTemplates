@@ -1,16 +1,18 @@
-# pheno_tpl
+# circepy-phenotypes
 
 Efficient, Python-native generation of the **phevaluator-style phenotyping
 template family** — a `base_case` cohort plus 22 specificity templates (as
 originally defined in `r_template.R`) — built on **CircePy's Ibis execution
-layer** (`circe.execution`, the `develop` branch of `OHDSI/CircePy`).
+layer** (`circe.execution`), plus a **label-based evaluation** layer that scores
+each candidate cohort against a gold standard with proxy
+sensitivity/specificity/PPV/NPV.
 
-The key idea: instead of defining and executing 23 near-identical cohort
-definitions (each re-running the same expensive OMOP domain scans), compute the
-**index event cohort once**, compute each **inclusion population once**, and
-derive all 23 templates as **trivial set algebra** over those shared results.
-The decomposition is *exact*: every template's output is identical to running
-the full per-template cohort, as enforced by parity tests.
+The key idea for generation: instead of defining and executing 23 near-identical
+cohort definitions (each re-running the same expensive OMOP domain scans),
+compute the **index event cohort once**, compute each **inclusion population
+once**, and derive all 23 templates as **trivial set algebra** over those shared
+results. The decomposition is *exact*: every template's output is identical to
+running the full per-template cohort, as enforced by parity tests.
 
 ---
 
@@ -36,7 +38,7 @@ Evidence is grouped into categories, each querying multiple OMOP domains:
 | `A` | alternative diagnoses (**excluded**) | −30 … +30 days | condition, observation |
 
 The 22 templates are just different combinations of these populations, e.g.
-`(S|D)`, `(T|C|F)^!A`, `(S^D)^(T^C^F)`, etc. (full list below).
+`(S|D)`, `(T|C|F)^!A`, `(S^D)^(T^C^F)`, etc.
 
 **Inefficiency:** every template re-declares — and at execution time re-computes —
 the identical index event and the identical `S/D/T/C/F/A` populations. On a real
@@ -45,27 +47,44 @@ CDM that means the same domain-table scans are repeated ~23×.
 ## The approach
 
 1. **Index events once** — build the primary event relation (`person_id`,
-   `event_id`, `start_date`, …) for the first-ever `I` diagnosis, via
-   `circe.execution.engine.primary.build_primary_events`.
+   `event_id`, `start_date`, …) for the first-ever `I` diagnosis.
 2. **Inclusion populations once** — evaluate each atomic criterion group
-   (`S`, `D`, `T`, `C`, `F`, `A`) against the index events via
-   `circe.execution.engine.groups._evaluate_group`. Each produces a
-   `(person_id, event_id)` **key set** — the index events that match that
-   population. A criteria-group evaluation is a pure function of the index
-   events, so this is exact.
+   (`S`, `D`, `T`, `C`, `F`, `A`) against the index events. Each produces a
+   `(person_id, event_id)` **key set**. A criteria-group evaluation is a pure
+   function of the index events, so this is exact.
 3. **Templates as set algebra** — combine key sets with union/intersection
    (`withAny` → union, `withAll` → intersection, `!A` → intersection with the
    "no-A" key set), join back to the index events, then apply the standard
-   end-strategy / collapse pipeline (`apply_result_limit`,
-   `apply_end_strategy`, `collapse_events`).
+   end-strategy / collapse pipeline.
 4. **One write** — project all 23 results to OHDSI cohort-table shape
    (`cohort_definition_id, subject_id, cohort_start_date, cohort_end_date`),
    union them, and write to a single cohort table with **one**
    `CREATE TABLE … OVERWRITE` (the efficient Databricks path).
 
-With intermediate materialization, the shared artifacts are persisted to
-scratch tables so each expensive scan runs exactly once regardless of the query
-optimizer's common-subexpression handling.
+## Evaluation
+
+Beyond generation, the package scores each candidate cohort against a
+gold-standard label set. All evaluation components are CircePy
+`CohortExpression`s whose executed person sets are intersected with the same
+non-temporal `DemographicCriteria` at metric time:
+
+| Component | Meaning |
+|---|---|
+| Sensitive population `P` | persons with **any evidence** of the disease (may be widened across domains) |
+| Sensitive entry cohort `U₀` | `base_case` (first-ever `I`) |
+| Gold standard `G` | an expert "xSpec" definition |
+| Candidate `C` | a template (or any cohort expression) |
+
+Metrics (pure, label-based):
+
+```
+TP = |C' ∩ G'|    FP = |C' \ G'|    FN = |G' \ C'|    TN = |U' \ (C' ∪ G')|
+Sensitivity = TP/(TP+FN)   Specificity = TN/(TN+FP)
+PPV = TP/(TP+FP)           NPV = TN/(TN+FN)
+```
+
+The universe `U` defaults to `P'` (demographics-filtered sensitive population)
+or `U₀'`. Candidates are ranked by Youden's J, F1, or any metric.
 
 ## The 22 scenario templates
 
@@ -85,46 +104,39 @@ optimizer's common-subexpression handling.
 ```
 pheno_template/
 ├── r_template.R                  # original R/Capr reference (unchanged)
-├── pyproject.toml
-├── pheno_tpl/
+├── pyproject.toml                # name=circepy-phenotypes; src layout; console scripts
+├── src/circepy_phenotypes/
 │   ├── __init__.py
-│   ├── backend.py                 # connect_backend(): DuckDB / Databricks
-│   ├── concept_sets.py            # Capr cs()/descendants() + overlap resolution
-│   ├── criteria.py                # criterion builders -> CircePy models
-│   ├── templates.py               # TemplateSpecs + full CohortExpression builder
-│   ├── family.py                  # wires specs -> resolved family
-│   ├── setops.py                  # set algebra over (person_id, event_id) keys
-│   └── executor.py                # TemplateFamilyExecutor (the fast path)
+│   ├── config.py                 # pydantic config -> CircePy models
+│   ├── backend.py                # connect_backend(): DuckDB / Databricks
+│   ├── cli.py                    # `circepy-phenotypes` / `cpt`
+│   ├── py.typed
+│   ├── cohorts/
+│   │   ├── concept_sets.py       # cs() -> ConceptSet + overlap resolution
+│   │   ├── criteria.py           # criterion builders -> CircePy models
+│   │   ├── templates.py          # 23-template matrix -> CohortExpression
+│   │   ├── family.py             # FamilySpec -> ResolvedFamily
+│   │   ├── setops.py             # set algebra over (person_id, event_id) keys
+│   │   └── executor/
+│   │       ├── __init__.py       # TemplateFamilyExecutor (fast path)
+│   │       └── _engine.py        # THE ONLY place importing circe.execution internals
+│   └── evaluation/
+│       ├── population.py         # any-evidence sensitive-population expression
+│       ├── demographics.py       # uniform DemographicCriteria (∩ T)
+│       ├── cohorts.py            # gold-standard (xSpec) expression builder
+│       ├── metrics.py            # label-based sens/spec/ppv/npv (pure)
+│       ├── selection.py          # rank (Youden's J, F1, ...)
+│       └── report.py             # tidy metrics table + optional plot
 ├── examples/
-│   ├── afib_eunomia.py            # full AFib family on the Eunomia CDM
-│   └── run_phenotype.py           # CLI: run the templating on DuckDB/Databricks
-├── pheno_tpl_db_config.yaml.example
 └── tests/
-    ├── conftest.py               # deterministic in-memory DuckDB CDM fixture
-    ├── test_parity.py            # fast path == per-template build_cohort
-    ├── test_overlaps.py          # overlap-resolution rules
-    ├── test_structure.py         # Capr->CircePy mapping assertions
-    └── test_eunomia_parity.py    # opt-in, real-CDM parity (slow)
 ```
-
-## Modules
-
-| Module | Purpose |
-|---|---|
-| `backend.py` | `connect_backend("duckdb"\|"databricks")` → `BackendConnection` (schema config, YAML/env expansion, Databricks wiring) |
-| `concept_sets.py` | `cs()`/`descendants()` builder producing `ConceptSet` models, plus `resolve_concept_set_overlaps()` replicating the R precedence rules (`I` beats `S/C/A`, `A` beats `S/C`, `S↔C` overlap allowed, `D/T` untouched) |
-| `criteria.py` | Builders for the index entry, multi-domain criterion groups, the `F` follow-up group, the `A` exclusion group, windows, end strategies and collapse settings — emitting CircePy models with 1:1 Capr semantics |
-| `templates.py` | The 23 `TemplateSpec`s and `build_template_expression()` producing a full, standalone `CohortExpression` per template |
-| `family.py` | `FamilySpec` (input concept sets) → `ResolvedFamily` (resolved concept sets, `codeset_ids`, atomic groups, per-template expressions, `cohort_ids`) |
-| `setops.py` | `union_keys` / `intersect_keys` / `combine_key_sets` over key relations |
-| `executor.py` | `TemplateFamilyExecutor` — shared execution, intermediate materialization, single cohort-table write |
 
 ## Install
 
 Requires the `develop` branch of `OHDSI/CircePy` (which ships
 `circe.execution`). The installed copy must be the pinned commit this package
 was developed against, because the fast path imports a few internal executor
-functions (see *Caveats*).
+functions (isolated behind `cohorts/executor/_engine.py`).
 
 ```bash
 # CircePy (in its own checkout):
@@ -133,14 +145,14 @@ uv sync --extra ibis-duckdb --extra dev      # or: pip install -e ".[ibis-duckdb
 # this package:
 pip install -e .
 pip install -e ".[databricks]"              # optional, for Databricks
+pip install -e ".[report]"                  # optional, pandas + matplotlib
 ```
 
-## Quick start
+## Quick start: generation
 
 ```python
-from pheno_tpl import FamilySpec, TemplateFamilyExecutor, connect_backend, cs, resolve_family
+from circepy_phenotypes import FamilySpec, TemplateFamilyExecutor, connect_backend, cs, resolve_family
 
-# 1. Concept sets (Capr-style; descendants expand against the backend vocabulary)
 spec = FamilySpec(
     cs_I=cs((313217, 605092), name="Atrial fibrillation"),
     cs_S=cs(descendants=(27674, 79908, 259153), name="AFib symptoms"),
@@ -152,36 +164,91 @@ spec = FamilySpec(
     exit_strategy="chronic",       # "chronic" | "acute14d" | "acute365d"
 )
 
-# 2. Resolve overlaps, build concept sets, atomic groups and expressions
 resolved = resolve_family(spec)
 
-# 3. Connect (DuckDB or Databricks) and execute: index + populations once,
-#    23 templates as set algebra
 conn = connect_backend("duckdb")            # or connect_backend("databricks")
 executor = TemplateFamilyExecutor(
     conn.backend,
     cdm_schema=conn.cdm_schema,
-    results_schema=conn.results_schema,     # scratch/intermediate + cohort table schema
+    results_schema=conn.results_schema,
     vocabulary_schema=conn.vocabulary_schema,
 )
 relations = executor.run_resolved(resolved, materialize_intermediates=True)
 # -> {name: ibis relation} for base_case, tpl_1, ..., tpl_22
 
-# 4. Write all 23 into a single OHDSI cohort table keyed by cohort_definition_id
 executor.write_cohort_table(
     relations, cohort_ids=resolved.cohort_ids, cohort_table="phe_tpl_cohort"
 )
 ```
 
-### The per-template `CohortExpression` path (Atlas / SQL / fallback)
+## Quick start: evaluation
 
-`ResolvedFamily.expressions` holds a full, standalone `CohortExpression` for
-every template. Use these to:
+```python
+from circepy_phenotypes import (
+    connect_backend, evaluate, evidence_expression,
+    build_demographic_group, resolve_family, cs, FamilySpec,
+)
 
-- serialize to Atlas JSON (`expression.model_dump_json()`),
-- generate SQL via `circe.api.build_cohort_query(expression, options)`,
-- run independently via `circe.execution.build_cohort(expression, backend=…,
-  cdm_schema=…)` — used by the parity tests as the reference implementation.
+resolved = resolve_family(FamilySpec(cs_I=cs((313217,), name="AFib"), phenotype_label="AFib"))
+conn = connect_backend("duckdb")
+
+# Sensitive population: any evidence of the disease (condition/observation),
+# optionally widened across domains.
+population = evidence_expression(
+    [("condition_occurrence", 1), ("observation", 1)],
+    concept_sets=resolved.concept_sets,
+)
+
+# Gold standard = the sensitive entry cohort (base_case), or an xSpec expression.
+gold = resolved.expressions["base_case"][1]
+
+# Uniform non-temporal demographics, e.g. males only.
+male = build_demographic_group(gender=[8507])
+
+result = evaluate(
+    conn,
+    family=resolved,
+    population_expression=population,
+    gold_standard=gold,
+    demographic_group=male,
+    universe="sensitive_population",   # or "entry_cohort"
+)
+
+for name, metrics in result.metrics.items():
+    print(name, metrics.sensitivity, metrics.specificity, metrics.ppv, metrics.npv)
+```
+
+## CLI
+
+```bash
+# Generate the 23-template family into a single cohort table
+cpt run --config config.yaml
+
+# Evaluate candidate cohorts against a gold standard
+cpt evaluate --config config.yaml
+cpt evaluate --config config.yaml --csv metrics.csv --plot sens_spec.png
+```
+
+A minimal `config.yaml`:
+
+```yaml
+backend: duckdb                       # or databricks
+phenotype_label: "Atrial Fibrillation"
+concept_sets:
+  cs_I: { direct: [313217] }
+  cs_S: { descendants: [27674] }
+target_population:                    # uniform DemographicCriteria
+  gender: [8507]
+universe:
+  type: sensitive_population          # or entry_cohort
+  evidence:
+    - codeset_id: 1
+      domains: [condition_occurrence, observation]
+gold_standard:
+  codeset_id: 1
+  domains: [condition_occurrence, observation]
+  first: true
+```
 
 ## Databricks notes
 
@@ -193,69 +260,32 @@ every template. Use these to:
 - Databricks has **no transactional delete+insert replace**, so the executor
   deliberately writes the whole family with one `CREATE TABLE … OVERWRITE`
   rather than per-cohort read-modify-write.
-- Intermediate materialization (`materialize_intermediates=True`, the
-  recommended setting for Databricks) guarantees each population is computed
-  once, and keeps the 23 template queries cheap joins over scratch tables.
+- Intermediate materialization (`materialize_intermediates=True`, recommended
+  for Databricks) guarantees each population is computed once, and keeps the 23
+  template queries cheap joins over scratch tables.
+- Databricks config reads `pheno_tpl_db_config.yaml` (copy the `.example`) or
+  env vars: `DATABRICKS_HOST`, `DATABRICKS_HTTP_PATH`, `DATABRICKS_TOKEN`,
+  `DATABRICKS_CDM_SCHEMA`, `DATABRICKS_RESULTS_SCHEMA`.
 
-## Example
-
-```bash
-python examples/afib_eunomia.py
-```
-
-Builds the Atrial Fibrillation family (the actual concept sets from
-`r_template.R`) against the GiBleed Eunomia CDM, prints per-template counts, and
-writes a single `afib_phe_tpl_cohort` table. A writable copy of the Eunomia DB
-is used so the shared file is never mutated.
-
-## Running on DuckDB / Databricks
-
-`examples/run_phenotype.py` runs the templating family (the same code path as
-the quick start) using the shared connection helpers in `pheno_tpl.backend`:
+## Examples
 
 ```bash
-python examples/run_phenotype.py                        # DuckDB (stages Eunomia)
-python examples/run_phenotype.py --backend databricks   # Databricks
-python examples/run_phenotype.py --concept-sets my.json # custom concept sets
-python examples/run_phenotype.py --no-materialize       # skip scratch tables
+python examples/afib_eunomia.py          # AFib family on Eunomia (DuckDB)
+python examples/run_phenotype.py         # templating on DuckDB/Databricks
 ```
-
-It connects, resolves the family, executes all 23 templates (index events and
-inclusion populations computed once), writes a single OHDSI cohort table keyed
-by `cohort_definition_id`, and prints per-template counts.
-
-**Databricks configuration** — `connect_backend("databricks")` reads
-`pheno_tpl_db_config.yaml` (copy `pheno_tpl_db_config.yaml.example`) or the env
-vars:
-
-```bash
-export DATABRICKS_HOST=...            # https://<workspace>.cloud.databricks.com
-export DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/<id>
-export DATABRICKS_TOKEN=...
-export DATABRICKS_CDM_SCHEMA=catalog.schema
-export DATABRICKS_RESULTS_SCHEMA=...  # schema for scratch tables + cohort table
-```
-
-Requires `pip install -e ".[databricks]"` (ibis Databricks driver). The executor
-applies the Databricks post-connect workaround, materializes the shared
-populations to scratch tables, and writes the 23 templates with a single
-`CREATE TABLE … OVERWRITE`.
 
 ## Tests
 
 ```bash
-python -m pytest tests/                        # parity + structure + overlaps
+python -m pytest tests/                  # parity + structure + overlaps + evaluation
 PHENO_TPL_EUNOMIA=1 python -m pytest tests/test_eunomia_parity.py
 ```
 
-- `test_parity.py` — for all 23 templates, asserts the shared-execution path
-  (lazy and materialized) returns the exact same rows/persons as the reference
-  per-template `build_cohort()`, plus a single-cohort-table write test.
-- `test_structure.py` — asserts the generated expressions match the Capr mapping
-  (entry observation window 0/0, `First:true`, window bounds, occurrence types,
-  end strategies).
-- `test_overlaps.py` — asserts overlap resolution against the documented R
-  example.
+- `test_parity.py` — decomposed executor == per-template `build_cohort()`.
+- `test_structure.py` — Capr→CircePy mapping assertions.
+- `test_overlaps.py` — overlap-resolution rules.
+- `test_metrics.py` — pure confusion-matrix / metric / ranking tests.
+- `test_evaluation.py` — integration: population, demographics, invariants.
 - `test_eunomia_parity.py` — opt-in (slow) parity on the real Eunomia CDM.
 
 On the GiBleed Eunomia data, the reference path (23 × `build_cohort`) takes
@@ -265,16 +295,13 @@ result.
 ## Caveats & limitations
 
 - **Internal CircePy API coupling.** The fast path imports non-public
-  `circe.execution` functions (`build_primary_events`, `_evaluate_group`,
-  `attach_observation_period`, `apply_end_strategy`, `collapse_events`,
-  `apply_result_limit`, `project_to_ohdsi_cohort_table`). Pin the CircePy
-  commit you develop against; ideally these would be promoted to a public
-  facade upstream.
+  `circe.execution` functions, isolated behind `cohorts/executor/_engine.py`.
+  Pin the CircePy commit you develop against; when the public execution facade
+  lands (CircePy > 0.3.0), reimplement `_engine.py` against it.
 - **Vocabulary tables required.** Concept-set descendant expansion reads
-  `concept`, `concept_ancestor`, and `concept_relationship` on the backend, so
-  the CDM must include the OMOP vocabulary.
+  `concept`, `concept_ancestor`, and `concept_relationship` on the backend.
 - **Branch note.** The `circe.execution` layer is on the `develop` branch of
-  `OHDSI/CircePy`; the package pins to the exact commit it was built against.
+  `OHDSI/CircePy`.
 - The 22-template matrix, windows, and exit strategies mirror `r_template.R`
   exactly; changing the template matrix is a one-line change in
-  `pheno_tpl/templates.py`.
+  `cohorts/templates.py`.

@@ -5,13 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from circe.cohortdefinition import CohortExpression
+from circe.vocabulary import ConceptSet
 
-from .concept_sets import (
-    ConceptSet,
-    ConceptSetSpec,
-    make_concept_set,
-    resolve_concept_set_overlaps,
-)
+from .concept_sets import cs, resolve_concept_set_overlaps
 from .templates import (
     CONCEPT_SET_IDS,
     TEMPLATE_SPECS,
@@ -23,14 +19,14 @@ from .templates import (
 
 @dataclass
 class FamilySpec:
-    """Input concept sets for a phenotype family (Capr ``cs()`` specs)."""
+    """Input concept sets for a phenotype family (built via :func:`cs`)."""
 
-    cs_I: ConceptSetSpec
-    cs_S: ConceptSetSpec | None = None
-    cs_D: ConceptSetSpec | None = None
-    cs_T: ConceptSetSpec | None = None
-    cs_C: ConceptSetSpec | None = None
-    cs_A: ConceptSetSpec | None = None
+    cs_I: ConceptSet
+    cs_S: ConceptSet | None = None
+    cs_D: ConceptSet | None = None
+    cs_T: ConceptSet | None = None
+    cs_C: ConceptSet | None = None
+    cs_A: ConceptSet | None = None
     phenotype_label: str = ""
     exit_strategy: str = "chronic"
     expression_limit: str = "First"
@@ -55,20 +51,20 @@ class ResolvedFamily:
     era_days: int = 0
 
 
-def _to_concept_set(label: str, spec: ConceptSetSpec | None) -> ConceptSet | None:
-    if spec is None:
+def _assign_id(cs_obj: ConceptSet | None, label: str) -> ConceptSet | None:
+    if cs_obj is None:
         return None
-    return make_concept_set(CONCEPT_SET_IDS[label], spec)
+    return cs_obj.model_copy(update={"id": CONCEPT_SET_IDS[label]})
 
 
 def resolve_family(spec: FamilySpec) -> ResolvedFamily:
     """Resolve concept-set overlaps and build the shared family artifacts."""
-    cs_I = _to_concept_set("I", spec.cs_I)
-    cs_S = _to_concept_set("S", spec.cs_S)
-    cs_D = _to_concept_set("D", spec.cs_D)
-    cs_T = _to_concept_set("T", spec.cs_T)
-    cs_C = _to_concept_set("C", spec.cs_C)
-    cs_A = _to_concept_set("A", spec.cs_A)
+    cs_I = _assign_id(spec.cs_I, "I")
+    cs_S = _assign_id(spec.cs_S, "S")
+    cs_D = _assign_id(spec.cs_D, "D")
+    cs_T = _assign_id(spec.cs_T, "T")
+    cs_C = _assign_id(spec.cs_C, "C")
+    cs_A = _assign_id(spec.cs_A, "A")
 
     resolved = resolve_concept_set_overlaps(
         cs_I,
@@ -81,8 +77,11 @@ def resolve_family(spec: FamilySpec) -> ResolvedFamily:
     )
 
     # F (follow-up) uses the ER/Inpatient visit concept set, hard-coded like R.
-    er_inpatient = ConceptSetSpec(descendants=(9201, 9203, 262), name="ER/Inpatient visit types (hard-coded)")
-    cs_F_visit = make_concept_set(CONCEPT_SET_IDS["F_VISIT"], er_inpatient)
+    cs_F_visit = cs(
+        descendants=(9201, 9203, 262),
+        name="ER/Inpatient visit types (hard-coded)",
+        set_id=CONCEPT_SET_IDS["F_VISIT"],
+    )
 
     concept_sets = [
         c

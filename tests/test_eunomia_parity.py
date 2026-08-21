@@ -12,7 +12,7 @@ import tempfile
 
 import pytest
 
-from pheno_tpl import FamilySpec, TemplateFamilyExecutor, resolve_family
+from circepy_phenotypes import FamilySpec, TemplateFamilyExecutor, resolve_family
 
 EUNOMIA_DB = os.path.join(
     os.path.dirname(__file__), "..", "..", "Circepy", "eunomia_data", "GiBleed_5.3_1.4.duckdb"
@@ -37,13 +37,13 @@ def _make_spec() -> FamilySpec:
 
 
 def cs_direct():
-    from pheno_tpl import cs
+    from circepy_phenotypes import cs
 
     return cs((313217, 605092, 1340258), name="I")
 
 
 def cs_desc():
-    from pheno_tpl import cs
+    from circepy_phenotypes import cs
 
     return cs(descendants=(27674, 79908, 259153, 313217, 314665), name="S")
 

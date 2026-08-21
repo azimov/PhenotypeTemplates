@@ -4,39 +4,46 @@ The core idea (mirroring the plan):
 
   * compute the **index event cohort once** (primary events),
   * compute each **inclusion population once** (``S``, ``D``, ``T``, ``C``,
-    ``F``, ``A`` -> ``(person_id, event_id)`` key sets via
-    ``circe.execution.engine.groups._evaluate_group``),
+    ``F``, ``A`` -> ``(person_id, event_id)`` key sets),
   * then produce every template as **trivial set algebra** (union/intersection)
     over those key sets, followed by the standard end-strategy / collapse
     pipeline.
 
 This avoids re-running the expensive OMOP domain scans once per template.
+
+All CircePy execution internals are imported through :mod:`._engine` (the
+adapter), so a future CircePy public API can be adopted without touching this
+module.
 """
 
 from __future__ import annotations
 
 from circe.cohortdefinition import CohortExpression
 from circe.cohortdefinition.core import ResultLimit
-from circe.execution.databricks_compat import maybe_apply_databricks_post_connect_workaround
-from circe.execution.engine.collapse import collapse_events
-from circe.execution.engine.end_strategy import apply_end_strategy
-from circe.execution.engine.group_windows import attach_observation_period
-from circe.execution.engine.groups import _evaluate_group
-from circe.execution.engine.limits import apply_result_limit
-from circe.execution.engine.primary import build_primary_events
-from circe.execution.ibis.context import make_execution_context
-from circe.execution.ibis.materialize import project_to_ohdsi_cohort_table
-from circe.execution.ibis.operations import create_table, read_table
-from circe.execution.lower.criteria import lower_criterion
-from circe.execution.normalize.cohort import normalize_cohort
-from circe.execution.normalize.end_strategy import normalize_end_strategy
-from circe.execution.normalize.groups import normalize_criteria_group
-from circe.execution.plan.cohort import CohortPlan, PrimaryEventInput
+from circe.vocabulary import ConceptSet
 
-from .concept_sets import ConceptSet
-from .criteria import make_entry_criteria
-from .setops import combine_key_sets, intersect_all
-from .templates import POST_LABELS, PRE_LABELS, TemplateSpec, _effective_combo
+from ..criteria import make_entry_criteria
+from ..setops import combine_key_sets, intersect_all
+from ..templates import POST_LABELS, PRE_LABELS, TemplateSpec, _effective_combo
+from ._engine import (
+    CohortPlan,
+    PrimaryEventInput,
+    _evaluate_group,
+    apply_end_strategy,
+    apply_result_limit,
+    attach_observation_period,
+    build_primary_events,
+    collapse_events,
+    create_table,
+    lower_criterion,
+    make_execution_context,
+    maybe_apply_databricks_post_connect_workaround,
+    normalize_cohort,
+    normalize_criteria_group,
+    normalize_end_strategy,
+    project_to_ohdsi_cohort_table,
+    read_table,
+)
 
 PERSON_ID = "person_id"
 EVENT_ID = "event_id"
@@ -246,12 +253,12 @@ class TemplateFamilyExecutor:
         return results
 
     def run_resolved(self, resolved, *, materialize_intermediates: bool = False):
-        """Run a :class:`~pheno_tpl.family.ResolvedFamily` end to end.
+        """Run a :class:`~circepy_phenotypes.cohorts.family.ResolvedFamily` end to end.
 
         Returns ``{template_name: rows_relation}`` using the family's shared
         concept sets, atomic groups, end strategy, and collapse settings.
         """
-        from .criteria import make_collapse_settings, make_end_strategy
+        from ..criteria import make_collapse_settings, make_end_strategy
 
         return self.run(
             concept_sets=resolved.concept_sets,
@@ -279,10 +286,9 @@ class TemplateFamilyExecutor:
     ) -> None:
         """Project each template to OHDSI cohort-table shape and write once.
 
-        All 23 templates are combined into a single lazy relation and written
-        with one ``create_table`` (``overwrite``) call. This is the efficient
-        path for Databricks, which does not support the transactional
-        delete+insert replace used by ``circe.execution.write_cohort``.
+        All templates are combined into a single lazy relation and written with
+        one ``create_table`` (``overwrite``) call — the efficient path for
+        Databricks (no transactional delete+insert replace).
         """
         combined = None
         for name, relation in relations.items():

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from pheno_tpl import cs, resolve_concept_set_overlaps
+from circepy_phenotypes import cs, resolve_concept_set_overlaps
 
 
 def _ids(cs_obj):
-    from pheno_tpl import concept_ids
+    from circepy_phenotypes import concept_ids
 
     return set(concept_ids(cs_obj))
 

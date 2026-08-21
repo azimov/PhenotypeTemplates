@@ -6,7 +6,7 @@ import pytest
 from circe.api import build_cohort
 from circe.execution.ibis.operations import read_table
 
-from pheno_tpl import FamilySpec, TemplateFamilyExecutor, cs, resolve_family
+from circepy_phenotypes import FamilySpec, TemplateFamilyExecutor, cs, resolve_family
 
 EXPECTED_PERSONS = {
     "base_case": {1, 2, 3, 4},

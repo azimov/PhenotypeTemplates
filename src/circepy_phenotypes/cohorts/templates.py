@@ -14,8 +14,8 @@ from dataclasses import dataclass
 
 from circe.cohortdefinition import CohortExpression, InclusionRule
 from circe.cohortdefinition.core import ResultLimit
+from circe.vocabulary import ConceptSet
 
-from .concept_sets import ConceptSet
 from .criteria import (
     combine_criteria,
     condition_occurrence,

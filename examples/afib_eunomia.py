@@ -15,9 +15,9 @@ import tempfile
 
 import ibis
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from pheno_tpl import FamilySpec, TemplateFamilyExecutor, cs, resolve_family
+from circepy_phenotypes import FamilySpec, TemplateFamilyExecutor, cs, resolve_family
 
 EUNOMIA_DB = os.path.join(
     os.path.dirname(__file__), "..", "..", "Circepy", "eunomia_data", "GiBleed_5.3_1.4.duckdb"

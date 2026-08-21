@@ -16,9 +16,9 @@ import sys
 import ibis
 import yaml
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from pheno_tpl import FamilySpec, TemplateFamilyExecutor, cs, resolve_family
+from circepy_phenotypes import FamilySpec, TemplateFamilyExecutor, cs, resolve_family
 
 logger = logging.getLogger(__name__)
 

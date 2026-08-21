@@ -1,0 +1,28 @@
+# pheno_tpl database configuration.
+#
+# Copy this file to `pheno_tpl_db_config.yaml` and fill in the values, or set
+# the `${ENV_VAR}` placeholders below via environment variables. A local `.env`
+# file in the repo root is also loaded (does not override the shell).
+#
+# For DuckDB no configuration is required; `run_phenotype.py` stages a writable
+# Eunomia copy if needed.
+
+duckdb:
+  driver: duckdb
+
+# Databricks example (SQL Warehouse).
+# Required env vars: DATABRICKS_HOST, DATABRICKS_HTTP_PATH, DATABRICKS_TOKEN,
+#                    DATABRICKS_CDM_SCHEMA, DATABRICKS_RESULTS_SCHEMA
+# Optional:          DATABRICKS_CATALOG, DATABRICKS_SCHEMA
+databricks:
+  driver: databricks
+  connection:
+    server_hostname: "${DATABRICKS_HOST}"
+    http_path: "${DATABRICKS_HTTP_PATH}"
+    personal_access_token: "${DATABRICKS_TOKEN}"
+    catalog: "${DATABRICKS_CATALOG}"
+    schema: "${DATABRICKS_SCHEMA}"
+  # cdm_schema may be qualified as "catalog.schema" or unqualified.
+  cdm_schema: "${DATABRICKS_CDM_SCHEMA}"
+  results_schema: "${DATABRICKS_RESULTS_SCHEMA}"
+  vocabulary_schema: "${DATABRICKS_CDM_SCHEMA}"

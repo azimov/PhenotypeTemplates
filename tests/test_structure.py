@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from circe.cohortdefinition import CriteriaGroup, Occurrence
 
-from pheno_tpl import FamilySpec, cs, resolve_family
+from circepy_phenotypes import FamilySpec, cs, resolve_family
 
 
 def _family():
@@ -111,7 +111,7 @@ def test_tpl3_f_criterion_structure():
 
 
 def test_exit_strategies_map_correctly():
-    from pheno_tpl import make_end_strategy
+    from circepy_phenotypes import make_end_strategy
 
     assert make_end_strategy("chronic") is None
     acute = make_end_strategy("acute14d")
