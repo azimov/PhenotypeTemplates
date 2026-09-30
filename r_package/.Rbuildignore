@@ -1,0 +1,16 @@
+^renv$
+^renv\.lock$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^\.Rproj\.user$
+^.*\.Rproj$
+^\.idea$
+^\.venv$
+^\.DS_Store$
+^\.Rhistory$
+^\.RData$
+^extras$
+^largescalephentest$
+^output$
+^ClinicalDefinitionMetadata 1\.xlsx$

@@ -268,7 +268,7 @@ resolveConceptSetOverlaps <- function(cs_I,
       return(NULL)
     }
 
-    cs@Expression <- cs@Expression[keepIdx]
+    cs@Expression <- unname(cs@Expression[keepIdx])
     cs
   }
 
@@ -444,7 +444,9 @@ outcomePhenotypeTpl <- function(cs_I,
     if (length(preCombo) == 0L) {
       preGroup <- NULL
     } else {
-      preParts <- list(S = sCriterion, D = dCriterion)[preCombo]
+      # match() + unname() avoids indexing an unnamed list by name (silently NULL)
+      # while keeping preParts unnamed, since Capr/toCohortJson() misserializes named lists.
+      preParts <- unname(list(sCriterion, dCriterion)[match(preCombo, c("S", "D"))])
       preGroup <- combineCriteria(preParts, preOp)
     }
   } else {
@@ -469,7 +471,9 @@ outcomePhenotypeTpl <- function(cs_I,
     if (length(postCombo) == 0L) {
       postGroup <- NULL
     } else {
-      postParts <- list(T = tCriterion, C = cCriterion, F = fCriterion)[postCombo]
+      # match() + unname() avoids indexing an unnamed list by name (silently NULL)
+      # while keeping postParts unnamed, since Capr/toCohortJson() misserializes named lists.
+      postParts <- unname(list(tCriterion, cCriterion, fCriterion)[match(postCombo, c("T", "C", "F"))])
       postGroup <- combineCriteria(postParts, postOp)
     }
   } else {
@@ -1260,32 +1264,111 @@ for (nm in names(afibTemplates)) {
 cat("Wrote", length(afibTemplates), "cohort JSON files to output/\n")
 
 
-# ---- insert cohort definitions into Atlas (NOT executed) ---------------------
+# ---- instantiate cohorts on Databricks using CohortGenerator ----------------
 #
-# Guarded with `if (FALSE)` so sourcing/running this script never actually
-# contacts a WebApi instance. To use: copy this block out (or flip the guard),
-# set `webApiBaseUrl` to your Atlas/WebApi instance, and authenticate first if
-# required. Requires the ROhdsiWebApi package:
-#   remotes::install_github("OHDSI/ROhdsiWebApi")
+# Guarded with `if (FALSE)` so sourcing/running this script does not
+# automatically instantiate cohorts. To use: flip the guard and run.
+#
+# Requires the CohortGenerator package:
+#   remotes::install_github("OHDSI/CohortGenerator")
 
-if (FALSE) {
-  webApiBaseUrl <- "http://your-server:8080/WebAPI"
+  library(CohortGenerator)
+  library(yaml)
 
-  # Only needed if the WebApi instance requires authentication.
-  # authMethod can be "db", "ad", or "windows"; omit webApiPassword to be
-  # prompted for it interactively rather than hard-coding it here.
-  ROhdsiWebApi::authorizeWebApi(
-    baseUrl         = webApiBaseUrl,
-    authMethod      = "db",
-    webApiUsername  = "your_username"
+  # Load Databricks connection config
+  dbConfig <- yaml::read_yaml(path.expand("~/.config/ohdsi/databricks_connection.yml"))
+  dbConn <- dbConfig$databricks
+  password <- Sys.getenv("DATABRICKS_TOKEN")
+
+  if (is.null(password) || password == "")
+    cli::cli_abort("DATABRICKS_TOKEN ENVIRONMENT VARIABLE NOT SET")
+
+  databricksConnectionString <- glue::glue("jdbc:databricks://{Sys.getenv('DATABRICKS_HOST')}/default;transportMode=http;ssl=1;AuthMech=3;httpPath={Sys.getenv('DATABRICKS_HTTP_PATH')}")
+  # Create connection string for CohortGenerator with Databricks
+  connectionDetails <- DatabaseConnector::createConnectionDetails(
+    dbms = "spark",
+    connectionString = databricksConnectionString,
+    user = "token",
+    password = password
   )
 
-  atlasInsertResults <- insertCohortsIntoAtlas(
-    cohortList   = afibTemplates,
-    baseUrl      = webApiBaseUrl,
-    skipExisting = TRUE
+  # CDM and results schemas
+  cdmDatabaseSchema <- dbConn$cdm_schema
+  resultsDatabaseSchema <- dbConn$results_schema
+  cohortDatabaseSchema <- resultsDatabaseSchema
+  cohortId <- 0
+  cohortsToCreate <- data.frame()
+  lapply(afibTemplates, function(tpl) {
+      tryCatch(
+        {
+        cohortId <<- cohortId + 1
+
+        convTpl <- tpl |> toCirce()
+        names(convTpl$ConceptSets) <- NULL
+        cohortsToCreate <<- cohortsToCreate |> 
+          rbind(
+            data.frame(
+              cohortId   = cohortId,
+              cohortName = attr(tpl, "cohortName"),
+              json = Capr::toCohortJson(tpl),
+              sql = CirceR::buildCohortQuery(expression = Capr::toCohortJson(tpl), options = CirceR::createGenerateOptions(generateStats = FALSE))
+            )
+          )
+        },
+        error = function(msg) {
+
+          print(msg)
+          print(paste(cohortId, "filed to generate sql"))
+          browser()
+        }
+      )
+  })
+
+  # Create the cohort table
+  cat("Creating cohort tables in", cohortDatabaseSchema, "...\n")
+  cohortTableNames <- CohortGenerator::getCohortTableNames(cohortTable = "afib_phe_tpl_cohort_r")
+
+  # Instantiate (generate) the cohorts
+  cat("Instantiating", length(afibTemplates), "AFib phenotype templates on Databricks...\n")
+  CohortGenerator::runCohortGeneration(
+    connectionDetails, 
+    cdmDatabaseSchema, 
+    tempEmulationSchema = resultsDatabaseSchema, 
+    cohortDatabaseSchema = resultsDatabaseSchema, 
+    cohortTableNames = cohortTableNames, 
+    cohortDefinitionSet = cohortsToCreate, 
+    negativeControlOutcomeCohortSet = NULL, 
+    occurrenceType = "all", 
+    detectOnDescendants = FALSE, 
+    stopOnError = TRUE, 
+    outputFolder = "results_R", 
+    databaseId = 1,
+    minCellCount = 5, 
+    incremental = TRUE
   )
 
-  print(atlasInsertResults)
-}
+  # Summarize results
+  cat("\n--- Cohort Instantiation Summary ---\n")
+  connection <- DatabaseConnector::connect(connectionDetails)
+
+  for (i in seq_along(afibTemplates)) {
+    query <- sprintf(
+      "SELECT COUNT(*) as n_persons, COUNT(DISTINCT subject_id) as n_subjects FROM %s.%s WHERE cohort_definition_id = %d",
+      cohortDatabaseSchema,
+      cohortTableNames$cohortTable,
+      i
+    )
+    result <- DatabaseConnector::querySql(connection, query)
+    if (nrow(result) > 0) {
+      cat(sprintf("%2d. %s: %d records from %d persons\n",
+                  i,
+                  cohortsToCreate$cohortName[i],
+                  result$n_persons[1],
+                  result$n_subjects[1]))
+    }
+  }
+
+  DatabaseConnector::disconnect(connection)
+  cat("\nCohorts successfully instantiated in:", cohortDatabaseSchema, "\n")
+
 

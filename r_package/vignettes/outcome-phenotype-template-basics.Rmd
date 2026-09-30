@@ -1,0 +1,193 @@
+---
+title: "Building Individual Cohorts with outcomePhenotypeTpl()"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Building Individual Cohorts with outcomePhenotypeTpl()}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = requireNamespace("Eunomia", quietly = TRUE) &&
+    requireNamespace("CohortGenerator", quietly = TRUE) &&
+    requireNamespace("DatabaseConnector", quietly = TRUE) &&
+    requireNamespace("Capr", quietly = TRUE)
+)
+```
+
+The other vignette (`vignette("evidence-combination-cohorts")`) covers the two
+batch cohort-set builders, `buildPhenotypeTemplates()` and
+`buildEvidenceCombinationCohorts()`. This vignette instead walks through the
+standard building blocks in `R/CaprFunctions.R` that those batch builders sit
+on top of, so you can construct one-off cohort variants by hand with
+`outcomePhenotypeTpl()`.
+
+We use a small set of **contrived** concept sets for an illustrative "Atrial
+Fibrillation" phenotype (the categories mirror the `I`/`H`/`S`/`D`/`T`/`C`/`A`/`E`
+scheme documented at the top of `R/CaprFunctions.R`). The concept IDs are
+plausible OMOP standard concepts chosen for demonstration only — not a
+clinically validated phenotype definition.
+
+## Setup
+
+```{r setup}
+library(Capr)
+library(CohortGenerator)
+library(PhenotypeTemplates)
+```
+
+```{r eunomia-connect}
+connectionDetails <- Eunomia::getEunomiaConnectionDetails()
+cdmDatabaseSchema <- "main"
+cohortDatabaseSchema <- "main"
+cohortTable <- "phe_tpl_basics_vignette_cohorts"
+```
+
+## Contrived concept sets
+
+```{r concept-sets}
+afib_I <- cs(descendants(313217L), name = "Atrial fibrillation - disease of interest")
+afib_H <- cs(descendants(4232697L), name = "Cardiac arrhythmia - hypernym")
+afib_S <- cs(descendants(313418L), name = "Palpitations - symptom")
+afib_D <- cs(descendants(4013514L), name = "Electrocardiogram - diagnostic procedure")
+afib_T <- cs(descendants(1310149L), name = "Warfarin - treatment")
+afib_C <- cs(descendants(372924L), name = "Stroke - complication")
+afib_A <- cs(descendants(442077L), name = "Panic disorder - alternative diagnosis")
+afib_E <- cs(descendants(4142479L), name = "Hyperthyroidism - etiology")
+
+phenotypeLabel <- "Atrial Fibrillation (contrived)"
+```
+
+## Step 1: resolve concept set overlaps
+
+Categories share the condition/observation domain and can legitimately
+overlap (e.g. a code used for both `I` and `H`). `resolveConceptSetOverlaps()`
+applies the fixed precedence rules (I > A > H > E > {S, C}) so the same
+concept never counts toward two categories at once:
+
+```{r resolve-overlaps}
+resolved <- resolveConceptSetOverlaps(
+  cs_I = afib_I, cs_H = afib_H, cs_S = afib_S, cs_D = afib_D,
+  cs_T = afib_T, cs_C = afib_C, cs_A = afib_A, cs_E = afib_E
+)
+```
+
+## Step 2: resolve exit strategy and demographics
+
+`resolvePhenotypeExitStrategy()` turns a `clinicalCourse` (plus optional
+overrides) into an era-collapse gap and a Capr end strategy.
+`greateDemographicCriteria()` builds the optional age/gender entry criteria:
+
+```{r exit-and-demographics}
+exitConfig <- resolvePhenotypeExitStrategy(
+  clinicalCourse = "persistent_transient",
+  minimumInterepisodeDayGap = 180
+)
+
+demographicCriteria <- greateDemographicCriteria(minAge = 18, male = FALSE, female = FALSE)
+```
+
+## Step 3: build a single cohort variant with outcomePhenotypeTpl()
+
+`outcomePhenotypeTpl()` is the standard template used by both batch builders.
+Called directly, it produces one Capr cohort for exactly the evidence flags
+you pass in — here, a hospitalized, symptom/diagnostic + treatment/follow-up
+variant with alternative-diagnosis exclusion:
+
+```{r single-cohort}
+afibStrict <- outcomePhenotypeTpl(
+  cs_I = resolved$cs_I, cs_H = resolved$cs_H, cs_S = resolved$cs_S,
+  cs_D = resolved$cs_D, cs_T = resolved$cs_T, cs_C = resolved$cs_C,
+  cs_A = resolved$cs_A, cs_E = resolved$cs_E,
+  phenotypeLabel = phenotypeLabel,
+  templateSuffix = "strict-hosp-Aexcl",
+  useHypernymAsIndex = FALSE,
+  hasDescreteRecordedSymptoms = TRUE,
+  requiresDiagnosticTestOrProcedure = TRUE,
+  requiresActiveTreatmentWithin30d = TRUE,
+  expectsConditionSpecificFollowupOrSequelae1yr = TRUE,
+  treatmentFollowUpOp = "all",
+  excludeA = TRUE,
+  requiresHospitalization = TRUE,
+  demographicCriteria = demographicCriteria,
+  eraDays = exitConfig$eraDays,
+  endStrategy = exitConfig$endStrategy
+)
+```
+
+A second, looser variant — index on `I` or `H`, no hospitalization
+requirement, "at least 2 of 4" evidence components (via `evidenceThreshold`,
+see the combination vignette) instead of the strict AND/OR rule above:
+
+```{r second-cohort}
+afibLoose <- outcomePhenotypeTpl(
+  cs_I = resolved$cs_I, cs_H = resolved$cs_H, cs_S = resolved$cs_S,
+  cs_D = resolved$cs_D, cs_T = resolved$cs_T, cs_C = resolved$cs_C,
+  cs_A = resolved$cs_A, cs_E = resolved$cs_E,
+  phenotypeLabel = phenotypeLabel,
+  templateSuffix = "loose-IH-atLeast2",
+  useHypernymAsIndex = TRUE,
+  hasDescreteRecordedSymptoms = TRUE,
+  requiresDiagnosticTestOrProcedure = TRUE,
+  requiresActiveTreatmentWithin30d = TRUE,
+  expectsConditionSpecificFollowupOrSequelae1yr = TRUE,
+  evidenceThreshold = 2,
+  excludeA = FALSE,
+  requiresHospitalization = FALSE,
+  demographicCriteria = demographicCriteria,
+  eraDays = exitConfig$eraDays,
+  endStrategy = exitConfig$endStrategy
+)
+```
+
+## Step 4: assemble a cohort definition set and generate on Eunomia
+
+Each object returned by `outcomePhenotypeTpl()` is a plain Capr cohort with a
+`cohortName` attribute; convert them to the `CohortGenerator` cohort
+definition set shape and generate:
+
+```{r assemble-and-generate}
+toCohortRow <- function(tpl, cohortId) {
+  data.frame(
+    cohortId = cohortId,
+    cohortName = attr(tpl, "cohortName"),
+    json = Capr::toCohortJson(tpl),
+    sql = CirceR::buildCohortQuery(
+      expression = Capr::toCohortJson(tpl),
+      options = CirceR::createGenerateOptions(generateStats = FALSE)
+    )
+  )
+}
+
+manualCohorts <- rbind(
+  toCohortRow(afibStrict, 1L),
+  toCohortRow(afibLoose, 2L)
+)
+
+cohortTableNames <- CohortGenerator::getCohortTableNames(cohortTable = cohortTable)
+CohortGenerator::createCohortTables(
+  connectionDetails = connectionDetails,
+  cohortDatabaseSchema = cohortDatabaseSchema,
+  cohortTableNames = cohortTableNames
+)
+
+CohortGenerator::runCohortGeneration(
+  connectionDetails = connectionDetails,
+  cdmDatabaseSchema = cdmDatabaseSchema,
+  cohortDatabaseSchema = cohortDatabaseSchema,
+  cohortTableNames = cohortTableNames,
+  cohortDefinitionSet = manualCohorts,
+  incremental = FALSE,
+  outputFolder = "./eunomia_pval_templates"
+)
+
+CohortGenerator::getCohortCounts(
+  connectionDetails = connectionDetails,
+  cohortDatabaseSchema = cohortDatabaseSchema,
+  cohortTable = cohortTableNames$cohortTable,
+  cohortDefinitionSet = manualCohorts
+)
+```

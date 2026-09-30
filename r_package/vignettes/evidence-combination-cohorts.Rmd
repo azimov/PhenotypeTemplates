@@ -1,0 +1,151 @@
+---
+title: "Generating Phenotype Template Cohorts on Eunomia"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Generating Phenotype Template Cohorts on Eunomia}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = requireNamespace("Eunomia", quietly = TRUE) &&
+    requireNamespace("CohortGenerator", quietly = TRUE) &&
+    requireNamespace("DatabaseConnector", quietly = TRUE) &&
+    requireNamespace("Capr", quietly = TRUE)
+)
+```
+
+This vignette demonstrates both cohort-building entry points in this package
+against the [Eunomia](https://github.com/OHDSI/Eunomia) synthetic CDM, using a
+small set of **contrived** concept sets for an illustrative "Acute
+Gastrointestinal Bleed" phenotype. The concept IDs below are chosen to be
+plausible OMOP standard concepts for demonstration purposes only — they are
+not a clinically validated phenotype definition.
+
+1. `buildPhenotypeTemplates()` — the evidence-strictness *ladder* crossed with
+   index specificity, hospitalization, and alternative-diagnosis exclusion.
+2. `buildEvidenceCombinationCohorts()` — the curated *combination/threshold*
+   set (base case, single-evidence-only cohorts, and "at least K of 4"
+   cohorts).
+
+Both functions return a `CohortGenerator`-compatible cohort definition set,
+which we then generate on Eunomia with `CohortGenerator::runCohortGeneration()`.
+
+## Setup
+
+```{r setup}
+library(Capr)
+library(CohortGenerator)
+library(PhenotypeTemplates)
+```
+
+Download/connect to the Eunomia sample CDM:
+
+```{r eunomia-connect}
+connectionDetails <- Eunomia::getEunomiaConnectionDetails()
+cdmDatabaseSchema <- "main"
+cohortDatabaseSchema <- "main"
+cohortTable <- "phe_tpl_vignette_cohorts"
+```
+
+## Contrived concept sets
+
+Each clinical category (see `?buildPhenotypeTemplates`) is a `Capr::cs()`
+concept set built from `descendants()` of a single seed concept ID, purely
+for illustration:
+
+```{r concept-sets}
+gib_I <- cs(descendants(192671L), name = "GI hemorrhage - disease of interest")
+gib_H <- cs(descendants(4171594L), name = "GI tract disorder - hypernym")
+gib_S <- cs(descendants(200219L), name = "Abdominal pain - symptom")
+gib_D <- cs(descendants(4028949L), name = "Endoscopy - diagnostic procedure")
+gib_T <- cs(descendants(923645L), name = "Pantoprazole - treatment")
+gib_C <- cs(descendants(439777L), name = "Anemia - complication")
+gib_A <- cs(descendants(4027663L), name = "Peptic ulcer - alternative diagnosis")
+gib_E <- cs(descendants(1118084L), name = "NSAID exposure - etiology")
+
+phenotypeLabel <- "Acute GI Bleed (contrived)"
+```
+
+## Use case 1: evidence-strictness ladder (`buildPhenotypeTemplates()`)
+
+`buildPhenotypeTemplates()` crosses an evidence ladder (L0 index-only, L1
+treatment/follow-up, L2 symptom/diagnostic + treatment/follow-up) with index
+specificity (I vs I|H), hospitalization variants, and alternative-diagnosis
+exclusion:
+
+```{r ladder-config}
+ladderConfig <- phenotypeConfig(
+  clinicalCourse = "transient_single",
+  expectedCareSetting = "acute_care_common",
+  fixedExitDays = 30,
+  hasDescreteRecordedSymptoms = TRUE,
+  requiresDiagnosticTestOrProcedure = TRUE,
+  requiresActiveTreatmentWithin30d = TRUE,
+  expectsConditionSpecificFollowupOrSequelae1yr = TRUE
+)
+
+ladderCohorts <- buildPhenotypeTemplates(
+  cs_I = gib_I, cs_H = gib_H, cs_S = gib_S, cs_D = gib_D,
+  cs_T = gib_T, cs_C = gib_C, cs_A = gib_A, cs_E = gib_E,
+  phenotypeLabel = phenotypeLabel,
+  config = ladderConfig,
+  startCohortId = 0
+)
+
+ladderCohorts[, c("cohortId", "cohortName")]
+```
+
+## Use case 2: curated evidence combinations (`buildEvidenceCombinationCohorts()`)
+
+`buildEvidenceCombinationCohorts()` instead builds a base case, four
+single-evidence-only cohorts, and a set of "at least K of 4 evidence
+components" threshold cohorts, using `Capr::withAtLeast()` under the hood:
+
+```{r combo-cohorts}
+comboCohorts <- buildEvidenceCombinationCohorts(
+  cs_I = gib_I, cs_H = gib_H, cs_S = gib_S, cs_D = gib_D,
+  cs_T = gib_T, cs_C = gib_C, cs_A = gib_A, cs_E = gib_E,
+  phenotypeLabel = phenotypeLabel,
+  config = ladderConfig,
+  startCohortId = max(ladderCohorts$cohortId)
+)
+
+comboCohorts[, c("cohortId", "cohortName")]
+```
+
+## Generate both cohort sets on Eunomia
+
+Combine the two cohort definition sets and generate them together with
+`CohortGenerator`:
+
+```{r generate}
+allCohorts <- rbind(ladderCohorts, comboCohorts)
+
+cohortTableNames <- CohortGenerator::getCohortTableNames(cohortTable = cohortTable)
+CohortGenerator::createCohortTables(
+  connectionDetails = connectionDetails,
+  cohortDatabaseSchema = cohortDatabaseSchema,
+  cohortTableNames = cohortTableNames
+)
+
+CohortGenerator::runCohortGeneration(
+  connectionDetails = connectionDetails,
+  cdmDatabaseSchema = cdmDatabaseSchema,
+  cohortDatabaseSchema = cohortDatabaseSchema,
+  cohortTableNames = cohortTableNames,
+  cohortDefinitionSet = allCohorts,
+  incremental = FALSE,
+  outputFolder = "./eunomia_pval_templates"
+)
+
+CohortGenerator::getCohortCounts(
+  connectionDetails = connectionDetails,
+  cohortDatabaseSchema = cohortDatabaseSchema,
+  cohortTable = cohortTableNames$cohortTable,
+  cohortDefinitionSet = allCohorts
+)
+```
