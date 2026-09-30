@@ -25,6 +25,38 @@ recommendedCohortExitLookup <- c(
   "FIXED_WINDOW_FROM_INDEX"         = "fixed_window"
 )
 
+#' Infer occurrence/limit settings from a normalized clinical course
+#'
+#' Maps a normalized `clinicalCourse` (see `phenotypeConfig()`) to the
+#' `firstOccurrenceOnly`/`primaryCriteriaLimit`/`expressionLimit`/`hospitalVisitOverlapWindow`
+#' settings. These are not stored directly in the clinical definition metadata,
+#' so they are derived from the clinical course vocabulary.
+#'
+#' @param clinicalCourse One of `"persistent_stable"`, `"persistent_transient"`,
+#'   `"transient_recurrent"`, `"transient_single"`.
+#' @return A list with the four occurrence/limit settings.
+#' @noRd
+inferPhenotypeOccurrenceSettings <- function(clinicalCourse) {
+  setting <- switch(
+    clinicalCourse,
+    persistent_stable = list(
+      firstOccurrenceOnly = TRUE, primaryCriteriaLimit = "First", expressionLimit = "First"
+    ),
+    persistent_transient = list(
+      firstOccurrenceOnly = FALSE, primaryCriteriaLimit = "All", expressionLimit = "First"
+    ),
+    transient_recurrent = list(
+      firstOccurrenceOnly = FALSE, primaryCriteriaLimit = "All", expressionLimit = "All"
+    ),
+    transient_single = list(
+      firstOccurrenceOnly = TRUE, primaryCriteriaLimit = "First", expressionLimit = "First"
+    ),
+    stop(sprintf("Unknown clinical course: %s", clinicalCourse), call. = FALSE)
+  )
+
+  c(setting, list(hospitalVisitOverlapWindow = 99999))
+}
+
 #' Look up a single phenotype's row in a clinical definition metadata table
 #'
 #' Applies `nameOverrides` (metadata condition names that differ from the
@@ -78,9 +110,13 @@ getMetadataRow <- function(phenotypeName, metadata, nameOverrides = NULL,
 #' @return A phenotype config list, see `phenotypeConfig()`.
 #' @export
 translateMetadataConfig <- function(metadataRow) {
+  clinicalCourse <- unname(clinicalCourseLookup[metadataRow$clinical_course])
+  expectedCareSetting <- unname(expectedCareSettingLookup[metadataRow$expected_care_setting])
+  occurrenceSettings <- inferPhenotypeOccurrenceSettings(clinicalCourse)
+
   phenotypeConfig(
-    clinicalCourse = unname(clinicalCourseLookup[metadataRow$clinical_course]),
-    expectedCareSetting = unname(expectedCareSettingLookup[metadataRow$expected_care_setting]),
+    clinicalCourse = clinicalCourse,
+    expectedCareSetting = expectedCareSetting,
     minAge = metadataRow$min_age_years,
     maxAge = metadataRow$max_age_years,
     minimumInterepisodeDayGap = metadataRow$minimum_interepisode_gap_days,
@@ -90,6 +126,10 @@ translateMetadataConfig <- function(metadataRow) {
     requiresDiagnosticTestOrProcedure = metadataRow$requires_diagnostic_test_or_procedure,
     requiresActiveTreatmentWithin30d = metadataRow$requires_active_treatment_within_30d,
     expectsConditionSpecificFollowupOrSequelae1yr =
-      metadataRow$expects_condition_specific_followup_or_sequelae_1yr
+      metadataRow$expects_condition_specific_followup_or_sequelae_1yr,
+    firstOccurrenceOnly = occurrenceSettings$firstOccurrenceOnly,
+    primaryCriteriaLimit = occurrenceSettings$primaryCriteriaLimit,
+    expressionLimit = occurrenceSettings$expressionLimit,
+    hospitalVisitOverlapWindow = occurrenceSettings$hospitalVisitOverlapWindow
   )
 }

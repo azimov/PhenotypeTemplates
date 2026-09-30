@@ -143,8 +143,11 @@ recommendedCohortExitLookup <- c(
 
 buildConfigFromMetadataRow <- function(row) {
   sexConstraint <- parse_sex_constraint(row$sex_constraint)
+  clinicalCourse <- unname(clinicalCourseLookup[toupper(trimws(row$clinical_course))])
+  occurrenceSettings <- PhenotypeTemplates:::inferPhenotypeOccurrenceSettings(clinicalCourse)
+
   phenotypeConfig(
-    clinicalCourse = unname(clinicalCourseLookup[toupper(trimws(row$clinical_course))]),
+    clinicalCourse = clinicalCourse,
     expectedCareSetting = unname(expectedCareSettingLookup[toupper(trimws(row$expected_care_setting))]),
     minAge = str_to_numeric(row$min_age_years),
     maxAge = str_to_numeric(row$max_age_years),
@@ -157,7 +160,11 @@ buildConfigFromMetadataRow <- function(row) {
     hasDescreteRecordedSymptoms = str_to_logical(row$has_discrete_recorded_symptoms),
     requiresDiagnosticTestOrProcedure = str_to_logical(row$requires_diagnostic_test_or_procedure),
     requiresActiveTreatmentWithin30d = str_to_logical(row$requires_active_treatment_within_30d),
-    expectsConditionSpecificFollowupOrSequelae1yr = str_to_logical(row$expects_condition_specific_followup_or_sequelae_1yr)
+    expectsConditionSpecificFollowupOrSequelae1yr = str_to_logical(row$expects_condition_specific_followup_or_sequelae_1yr),
+    firstOccurrenceOnly = occurrenceSettings$firstOccurrenceOnly,
+    primaryCriteriaLimit = occurrenceSettings$primaryCriteriaLimit,
+    expressionLimit = occurrenceSettings$expressionLimit,
+    hospitalVisitOverlapWindow = occurrenceSettings$hospitalVisitOverlapWindow
   )
 }
 
@@ -214,9 +221,6 @@ for (phenotypeName in target_phenotypes) {
     cs_A = bucketCs[["A"]],
     cs_E = bucketCs[["E"]],
     phenotypeLabel = phenotypeName,
-    #firstOccurrenceOnly = FALSE,
-    #primaryCriteriaLimit = "All",
-    #expressionLimit      = "First"
     config = buildConfigFromMetadataRow(metadataRow)
   )
 }

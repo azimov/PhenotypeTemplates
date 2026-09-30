@@ -15,11 +15,7 @@ buildPhenotypeTemplates(
   cs_E = NULL,
   phenotypeLabel,
   config,
-  startCohortId = 0,
-  firstOccurrenceOnly = TRUE,
-  primaryCriteriaLimit = c("First", "All", "Last"),
-  expressionLimit = c("First", "All", "Last"),
-  hospitalVisitOverlapWindow = 99999
+  startCohortId = 0
 )
 }
 \arguments{
@@ -45,17 +41,10 @@ buildPhenotypeTemplates(
 `maxAge`, `male`, `female`, `minimumInterepisodeDayGap`,
 `recommendedCohortExit`, `fixedExitDays`, `hasDescreteRecordedSymptoms`,
 `requiresDiagnosticTestOrProcedure`, `requiresActiveTreatmentWithin30d`,
-`expectsConditionSpecificFollowupOrSequelae1yr`.}
+`expectsConditionSpecificFollowupOrSequelae1yr`, `firstOccurrenceOnly`,
+`primaryCriteriaLimit`, `expressionLimit`, `hospitalVisitOverlapWindow`.}
 
 \item{startCohortId}{cohortId to begin templates (use if you're building multiple template sets). First output id will be param + 1.}
-
-\item{firstOccurrenceOnly}{Passed through to `outcomePhenotypeTpl()`. Default TRUE.}
-
-\item{primaryCriteriaLimit}{Passed through to `outcomePhenotypeTpl()`. Default "First".}
-
-\item{expressionLimit}{Passed through to `outcomePhenotypeTpl()`. Default "First".}
-
-\item{hospitalVisitOverlapWindow}{Passed through to `outcomePhenotypeTpl()`. Default 99999.}
 }
 \value{
 A cohort definition set data frame (cohortId, cohortName, json, sql).

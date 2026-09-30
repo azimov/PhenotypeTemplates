@@ -17,7 +17,11 @@ phenotypeConfig(
   hasDescreteRecordedSymptoms = FALSE,
   requiresDiagnosticTestOrProcedure = FALSE,
   requiresActiveTreatmentWithin30d = FALSE,
-  expectsConditionSpecificFollowupOrSequelae1yr = FALSE
+  expectsConditionSpecificFollowupOrSequelae1yr = FALSE,
+  firstOccurrenceOnly = TRUE,
+  primaryCriteriaLimit = c("First", "All", "Last"),
+  expressionLimit = c("First", "All", "Last"),
+  hospitalVisitOverlapWindow = 99999
 )
 }
 \arguments{
@@ -51,6 +55,17 @@ exit types. Default NULL.}
 \item{requiresActiveTreatmentWithin30d}{Gate treatment evidence? Default FALSE.}
 
 \item{expectsConditionSpecificFollowupOrSequelae1yr}{Gate follow-up care? Default FALSE.}
+
+\item{firstOccurrenceOnly}{Index only a person's first-ever diagnosis? Default TRUE.}
+
+\item{primaryCriteriaLimit}{Which qualifying index event(s) to keep per person:
+`"First"`, `"All"`, or `"Last"`. Default `"First"`.}
+
+\item{expressionLimit}{Which qualifying events survive attrition: `"First"`,
+`"All"`, or `"Last"`. Default `"First"`.}
+
+\item{hospitalVisitOverlapWindow}{Days before/after index to look for an
+ER/Inpatient visit when hospitalization is required. Default 99999.}
 }
 \value{
 A named list suitable for passing as `config` to buildPhenotypeTemplates().

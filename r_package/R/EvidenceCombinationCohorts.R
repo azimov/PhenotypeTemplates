@@ -17,7 +17,6 @@
 #' @param phenotypeLabel Character label
 #' @param config Phenotype config (see `phenotypeConfig()` / `validatePhenotypeConfig()`)
 #' @param startCohortId Starting cohortId (first output will be +1)
-#' @param firstOccurrenceOnly,primaryCriteriaLimit,expressionLimit,hospitalVisitOverlapWindow Passed to `outcomePhenotypeTpl()`
 #' @return data.frame of cohort definitions (cohortId, cohortName, json, sql)
 #' @export
 buildEvidenceCombinationCohorts <- function(cs_I,
@@ -30,13 +29,7 @@ buildEvidenceCombinationCohorts <- function(cs_I,
                                             cs_E = NULL,
                                             phenotypeLabel,
                                             config,
-                                            startCohortId = 0,
-                                            firstOccurrenceOnly = TRUE,
-                                            primaryCriteriaLimit = c("First", "All", "Last"),
-                                            expressionLimit = c("First", "All", "Last"),
-                                            hospitalVisitOverlapWindow = 99999) {
-  primaryCriteriaLimit <- match.arg(primaryCriteriaLimit)
-  expressionLimit <- match.arg(expressionLimit)
+                                            startCohortId = 0) {
   config <- validatePhenotypeConfig(config)
 
   # resolve overlaps
@@ -80,10 +73,10 @@ buildEvidenceCombinationCohorts <- function(cs_I,
     excludeA = FALSE,
     requiresHospitalization = FALSE,
     demographicCriteria = demographicCriteria,
-    firstOccurrenceOnly = firstOccurrenceOnly,
-    primaryCriteriaLimit = primaryCriteriaLimit,
-    expressionLimit = expressionLimit,
-    hospitalVisitOverlapWindow = hospitalVisitOverlapWindow,
+    firstOccurrenceOnly = config$firstOccurrenceOnly,
+    primaryCriteriaLimit = config$primaryCriteriaLimit,
+    expressionLimit = config$expressionLimit,
+    hospitalVisitOverlapWindow = config$hospitalVisitOverlapWindow,
     eraDays = exitConfig$eraDays,
     endStrategy = exitConfig$endStrategy
   )

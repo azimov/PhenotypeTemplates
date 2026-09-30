@@ -15,11 +15,7 @@ buildEvidenceCombinationCohorts(
   cs_E = NULL,
   phenotypeLabel,
   config,
-  startCohortId = 0,
-  firstOccurrenceOnly = TRUE,
-  primaryCriteriaLimit = c("First", "All", "Last"),
-  expressionLimit = c("First", "All", "Last"),
-  hospitalVisitOverlapWindow = 99999
+  startCohortId = 0
 )
 }
 \arguments{
@@ -31,8 +27,6 @@ buildEvidenceCombinationCohorts(
 \item{config}{Phenotype config (see `phenotypeConfig()` / `validatePhenotypeConfig()`)}
 
 \item{startCohortId}{Starting cohortId (first output will be +1)}
-
-\item{firstOccurrenceOnly, primaryCriteriaLimit, expressionLimit, hospitalVisitOverlapWindow}{Passed to `outcomePhenotypeTpl()`}
 }
 \value{
 data.frame of cohort definitions (cohortId, cohortName, json, sql)

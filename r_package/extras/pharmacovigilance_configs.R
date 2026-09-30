@@ -71,9 +71,12 @@ for (i in seq_len(nrow(pv_outcomes))) {
   
   sex_constraint <- parse_sex_constraint(row$sex_constraint)
   
+  clinical_course <- normalize_clinical_course(row$clinical_course)
+  occurrence_settings <- PhenotypeTemplates:::inferPhenotypeOccurrenceSettings(clinical_course)
+
   # Create config
   config <- phenotypeConfig(
-    clinicalCourse = normalize_clinical_course(row$clinical_course),
+    clinicalCourse = clinical_course,
     expectedCareSetting = normalize_care_setting(row$expected_care_setting),
     minAge = str_to_numeric(row$min_age_years),
     maxAge = str_to_numeric(row$max_age_years),
@@ -86,7 +89,11 @@ for (i in seq_len(nrow(pv_outcomes))) {
     hasDescreteRecordedSymptoms = str_to_logical(row$has_discrete_recorded_symptoms),
     requiresDiagnosticTestOrProcedure = str_to_logical(row$requires_diagnostic_test_or_procedure),
     requiresActiveTreatmentWithin30d = str_to_logical(row$requires_active_treatment_within_30d),
-    expectsConditionSpecificFollowupOrSequelae1yr = str_to_logical(row$expects_condition_specific_followup_or_sequelae_1yr)
+    expectsConditionSpecificFollowupOrSequelae1yr = str_to_logical(row$expects_condition_specific_followup_or_sequelae_1yr),
+    firstOccurrenceOnly = occurrence_settings$firstOccurrenceOnly,
+    primaryCriteriaLimit = occurrence_settings$primaryCriteriaLimit,
+    expressionLimit = occurrence_settings$expressionLimit,
+    hospitalVisitOverlapWindow = occurrence_settings$hospitalVisitOverlapWindow
   )
   
   pv_configs[[config_name]] <- config

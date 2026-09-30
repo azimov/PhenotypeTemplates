@@ -14,7 +14,9 @@ test_that("phenotypeConfig produces a list with all expected fields", {
     "clinicalCourse", "expectedCareSetting", "minAge", "maxAge",
     "male", "female", "minimumInterepisodeDayGap", "recommendedCohortExit",
     "fixedExitDays", "hasDescreteRecordedSymptoms", "requiresDiagnosticTestOrProcedure",
-    "requiresActiveTreatmentWithin30d", "expectsConditionSpecificFollowupOrSequelae1yr"
+    "requiresActiveTreatmentWithin30d", "expectsConditionSpecificFollowupOrSequelae1yr",
+    "firstOccurrenceOnly", "primaryCriteriaLimit", "expressionLimit",
+    "hospitalVisitOverlapWindow"
   ) %in% names(cfg)))
 })
 
@@ -30,6 +32,10 @@ test_that("phenotypeConfig defaults booleans to FALSE", {
   expect_false(cfg$expectsConditionSpecificFollowupOrSequelae1yr)
   expect_false(cfg$male)
   expect_false(cfg$female)
+  expect_true(cfg$firstOccurrenceOnly)
+  expect_equal(cfg$primaryCriteriaLimit, "First")
+  expect_equal(cfg$expressionLimit, "First")
+  expect_equal(cfg$hospitalVisitOverlapWindow, 99999)
 })
 
 test_that("validatePhenotypeConfig coerces NA numeric fields to NULL or 0", {
@@ -67,6 +73,22 @@ test_that("phenotypeConfig honors provided boolean and numeric values", {
   expect_false(cfg$female)
   expect_equal(cfg$minimumInterepisodeDayGap, 90)
   expect_true(cfg$requiresActiveTreatmentWithin30d)
+})
+
+test_that("phenotypeConfig honors provided occurrence/limit values", {
+  cfg <- phenotypeConfig(
+    clinicalCourse = "transient_recurrent",
+    expectedCareSetting = "acute_care_common",
+    firstOccurrenceOnly = FALSE,
+    primaryCriteriaLimit = "All",
+    expressionLimit = "Last",
+    hospitalVisitOverlapWindow = 0
+  )
+
+  expect_false(cfg$firstOccurrenceOnly)
+  expect_equal(cfg$primaryCriteriaLimit, "All")
+  expect_equal(cfg$expressionLimit, "Last")
+  expect_equal(cfg$hospitalVisitOverlapWindow, 0)
 })
 
 test_that("phenotypeConfig can be passed to buildPhenotypeTemplates", {

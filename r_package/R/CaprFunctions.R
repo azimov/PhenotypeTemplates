@@ -66,6 +66,10 @@
 #   requiresDiagnosticTestOrProcedure               - gates D (-30..0)
 #   requiresActiveTreatmentWithin30d                - gates T (0..+30)
 #   expectsConditionSpecificFollowupOrSequelae1yr   - gates Follow-up Care
+#   firstOccurrenceOnly                             - index only first-ever diagnosis
+#   primaryCriteriaLimit                            - "First"|"All"|"Last" per person
+#   expressionLimit                                 - "First"|"All"|"Last" post-attrition
+#   hospitalVisitOverlapWindow                      - ±days around index for hospitalization
 #
 # Each phenotype call produces a combinatorial set of cohorts crossed on:
 #   evidence-strictness ladder (base -> care -> full, skipping duplicate
@@ -801,6 +805,24 @@ validatePhenotypeConfig <- function(config) {
     config[[f]] <- isTRUE(config[[f]])
   }
 
+  config$firstOccurrenceOnly <- if (is.null(config$firstOccurrenceOnly)) {
+    TRUE
+  } else {
+    isTRUE(config$firstOccurrenceOnly)
+  }
+
+  config$primaryCriteriaLimit <- match.arg(
+    if (is.null(config$primaryCriteriaLimit)) "First" else config$primaryCriteriaLimit,
+    c("First", "All", "Last")
+  )
+  config$expressionLimit <- match.arg(
+    if (is.null(config$expressionLimit)) "First" else config$expressionLimit,
+    c("First", "All", "Last")
+  )
+  if (is.null(config$hospitalVisitOverlapWindow) || is.na(config$hospitalVisitOverlapWindow)) {
+    config$hospitalVisitOverlapWindow <- 99999
+  }
+
   config
 }
 
@@ -827,6 +849,13 @@ validatePhenotypeConfig <- function(config) {
 #' @param requiresDiagnosticTestOrProcedure Gate diagnostic evidence? Default FALSE.
 #' @param requiresActiveTreatmentWithin30d Gate treatment evidence? Default FALSE.
 #' @param expectsConditionSpecificFollowupOrSequelae1yr Gate follow-up care? Default FALSE.
+#' @param firstOccurrenceOnly Index only a person's first-ever diagnosis? Default TRUE.
+#' @param primaryCriteriaLimit Which qualifying index event(s) to keep per person:
+#'   `"First"`, `"All"`, or `"Last"`. Default `"First"`.
+#' @param expressionLimit Which qualifying events survive attrition: `"First"`,
+#'   `"All"`, or `"Last"`. Default `"First"`.
+#' @param hospitalVisitOverlapWindow Days before/after index to look for an
+#'   ER/Inpatient visit when hospitalization is required. Default 99999.
 #' @return A named list suitable for passing as `config` to buildPhenotypeTemplates().
 #' @export
 phenotypeConfig <- function(
@@ -842,8 +871,15 @@ phenotypeConfig <- function(
   hasDescreteRecordedSymptoms = FALSE,
   requiresDiagnosticTestOrProcedure = FALSE,
   requiresActiveTreatmentWithin30d = FALSE,
-  expectsConditionSpecificFollowupOrSequelae1yr = FALSE
+  expectsConditionSpecificFollowupOrSequelae1yr = FALSE,
+  firstOccurrenceOnly = TRUE,
+  primaryCriteriaLimit = c("First", "All", "Last"),
+  expressionLimit = c("First", "All", "Last"),
+  hospitalVisitOverlapWindow = 99999
 ) {
+  primaryCriteriaLimit <- match.arg(primaryCriteriaLimit)
+  expressionLimit      <- match.arg(expressionLimit)
+
   list(
     clinicalCourse = clinicalCourse,
     expectedCareSetting = expectedCareSetting,
@@ -857,7 +893,11 @@ phenotypeConfig <- function(
     hasDescreteRecordedSymptoms = hasDescreteRecordedSymptoms,
     requiresDiagnosticTestOrProcedure = requiresDiagnosticTestOrProcedure,
     requiresActiveTreatmentWithin30d = requiresActiveTreatmentWithin30d,
-    expectsConditionSpecificFollowupOrSequelae1yr = expectsConditionSpecificFollowupOrSequelae1yr
+    expectsConditionSpecificFollowupOrSequelae1yr = expectsConditionSpecificFollowupOrSequelae1yr,
+    firstOccurrenceOnly = firstOccurrenceOnly,
+    primaryCriteriaLimit = primaryCriteriaLimit,
+    expressionLimit = expressionLimit,
+    hospitalVisitOverlapWindow = hospitalVisitOverlapWindow
   )
 }
 
@@ -931,12 +971,9 @@ buildEvidenceLadder <- function(config) {
 #'   `maxAge`, `male`, `female`, `minimumInterepisodeDayGap`,
 #'   `recommendedCohortExit`, `fixedExitDays`, `hasDescreteRecordedSymptoms`,
 #'   `requiresDiagnosticTestOrProcedure`, `requiresActiveTreatmentWithin30d`,
-#'   `expectsConditionSpecificFollowupOrSequelae1yr`.
+#'   `expectsConditionSpecificFollowupOrSequelae1yr`, `firstOccurrenceOnly`,
+#'   `primaryCriteriaLimit`, `expressionLimit`, `hospitalVisitOverlapWindow`.
 #' @param startCohortId cohortId to begin templates (use if you're building multiple template sets). First output id will be param + 1.
-#' @param firstOccurrenceOnly Passed through to `outcomePhenotypeTpl()`. Default TRUE.
-#' @param primaryCriteriaLimit Passed through to `outcomePhenotypeTpl()`. Default "First".
-#' @param expressionLimit Passed through to `outcomePhenotypeTpl()`. Default "First".
-#' @param hospitalVisitOverlapWindow Passed through to `outcomePhenotypeTpl()`. Default 99999.
 #' @return A cohort definition set data frame (cohortId, cohortName, json, sql).
 #' @export
 buildPhenotypeTemplates <- function(cs_I,
@@ -949,16 +986,10 @@ buildPhenotypeTemplates <- function(cs_I,
                                     cs_E = NULL,
                                     phenotypeLabel,
                                     config,
-                                    startCohortId = 0,
-                                    firstOccurrenceOnly = TRUE,
-                                    primaryCriteriaLimit = c("First", "All", "Last"),
-                                    expressionLimit = c("First", "All", "Last"),
-                                    hospitalVisitOverlapWindow = 99999) {
+                                    startCohortId = 0) {
   if (missing(phenotypeLabel) || !nzchar(phenotypeLabel)) {
     stop("phenotypeLabel is required", call. = FALSE)
   }
-  primaryCriteriaLimit <- match.arg(primaryCriteriaLimit)
-  expressionLimit      <- match.arg(expressionLimit)
   config <- validatePhenotypeConfig(config)
 
   # ---- resolve concept set overlaps ----
@@ -1017,10 +1048,10 @@ buildPhenotypeTemplates <- function(cs_I,
             excludeA = excl,
             requiresHospitalization = hosp,
             demographicCriteria = demographicCriteria,
-            firstOccurrenceOnly = firstOccurrenceOnly,
-            primaryCriteriaLimit = primaryCriteriaLimit,
-            expressionLimit = expressionLimit,
-            hospitalVisitOverlapWindow = hospitalVisitOverlapWindow,
+            firstOccurrenceOnly = config$firstOccurrenceOnly,
+            primaryCriteriaLimit = config$primaryCriteriaLimit,
+            expressionLimit = config$expressionLimit,
+            hospitalVisitOverlapWindow = config$hospitalVisitOverlapWindow,
             eraDays = exitConfig$eraDays,
             endStrategy = exitConfig$endStrategy
           )

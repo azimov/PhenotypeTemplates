@@ -62,6 +62,10 @@ test_that("translateMetadataConfig produces a valid phenotypeConfig()", {
   expect_equal(cfg$clinicalCourse, "persistent_stable")
   expect_equal(cfg$expectedCareSetting, "outpatient_expected")
   expect_equal(cfg$recommendedCohortExit, "continuous_observation")
+  expect_true(cfg$firstOccurrenceOnly)
+  expect_equal(cfg$primaryCriteriaLimit, "First")
+  expect_equal(cfg$expressionLimit, "First")
+  expect_equal(cfg$hospitalVisitOverlapWindow, 99999)
 
   exitConfig <- resolvePhenotypeExitStrategy(
     clinicalCourse = cfg$clinicalCourse,
