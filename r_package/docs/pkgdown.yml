@@ -1,0 +1,7 @@
+pandoc: '3.2'
+pkgdown: 2.2.0
+pkgdown_sha: ~
+articles:
+  evidence-combination-cohorts: evidence-combination-cohorts.html
+  outcome-phenotype-template-basics: outcome-phenotype-template-basics.html
+last_built: 2026-09-10T15:04Z

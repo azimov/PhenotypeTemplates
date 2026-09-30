@@ -1,0 +1,26 @@
+<urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
+<url><loc>/404.html</loc></url>
+<url><loc>/articles/evidence-combination-cohorts.html</loc></url>
+<url><loc>/articles/index.html</loc></url>
+<url><loc>/articles/outcome-phenotype-template-basics.html</loc></url>
+<url><loc>/authors.html</loc></url>
+<url><loc>/index.html</loc></url>
+<url><loc>/reference/buildCsFromConceptSetCsv.html</loc></url>
+<url><loc>/reference/buildEvidenceCombinationCohorts.html</loc></url>
+<url><loc>/reference/buildMergedConceptSetsByBin.html</loc></url>
+<url><loc>/reference/buildPhenotypeTemplates.html</loc></url>
+<url><loc>/reference/conceptIdsToItems.html</loc></url>
+<url><loc>/reference/dot-authWebApi.html</loc></url>
+<url><loc>/reference/dot-phenelopeBinDirs.html</loc></url>
+<url><loc>/reference/greateDemographicCriteria.html</loc></url>
+<url><loc>/reference/index.html</loc></url>
+<url><loc>/reference/insertCohortsIntoAtlas.html</loc></url>
+<url><loc>/reference/mergeConceptSets.html</loc></url>
+<url><loc>/reference/outcomePhenotypeTpl.html</loc></url>
+<url><loc>/reference/phenotypeConfig.html</loc></url>
+<url><loc>/reference/resolveConceptSet.html</loc></url>
+<url><loc>/reference/resolveConceptSetOverlaps.html</loc></url>
+<url><loc>/reference/resolveHospitalizationVariants.html</loc></url>
+<url><loc>/reference/resolvePhenotypeExitStrategy.html</loc></url>
+</urlset>
+

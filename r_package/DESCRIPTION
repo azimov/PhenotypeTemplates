@@ -1,0 +1,31 @@
+Package: PhenotypeTemplates
+Type: Package
+Title: Phenotype Templates for PhenVal
+Version: 0.1.0
+Authors@R: person("Jamie", "Gilbert", email = "gilbert@ohdsi.org", role = c("aut", "cre"))
+Description: Generates a combinatorial set of OHDSI cohort definitions from a 
+    parameterized phenotype configuration. Supports multiple evidence-strictness 
+    levels, hospitalization requirements, index specificity modes, and A-exclusion 
+    variants across configurable clinical courses and care settings.
+License: Apache License 2.0
+Depends:
+    R (>= 4.0)
+Imports:
+    Capr (>= 3.0.0),
+    DatabaseConnector (>= 6.0.0),
+    CohortGenerator (>= 1.0.0)
+Remotes:
+    OHDSI/Capr@develop,
+    OHDSI/DatabaseConnector,
+    OHDSI/CohortGenerator
+Suggests:
+    testthat (>= 3.0.0),
+    renv,
+    Eunomia,
+    knitr,
+    rmarkdown,
+    dplyr
+LazyData: true
+Encoding: UTF-8
+Config/roxygen2/version: 8.1.0
+VignetteBuilder: knitr

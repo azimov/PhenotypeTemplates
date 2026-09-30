@@ -1,0 +1,10 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+renv
+.Rprofile
+.idea
+eunomia_pval_templates/
+vignettes/*.knit.md
+vignettes/*.utf8.md

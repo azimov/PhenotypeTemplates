@@ -1,0 +1,64 @@
+template:
+  bootstrap: 5
+
+home:
+  title: PhenotypeTemplates
+  description: >
+    Generates a combinatorial set of OHDSI cohort definitions from a
+    parameterized phenotype configuration.
+
+navbar:
+  structure:
+    left: [intro, reference, articles, news]
+    right: [github]
+
+articles:
+- title: Vignettes
+  navbar: ~
+  contents:
+  - outcome-phenotype-template-basics
+  - evidence-combination-cohorts
+
+reference:
+- title: Phenotype configuration
+  desc: >
+    Build and validate the per-phenotype config used by the cohort-set
+    builders below.
+  contents:
+  - phenotypeConfig
+  - resolvePhenotypeExitStrategy
+  - resolveHospitalizationVariants
+
+- title: Cohort-set builders
+  desc: >
+    High-level, batch entry points that produce a CohortGenerator-compatible
+    cohort definition set for a phenotype.
+  contents:
+  - buildPhenotypeTemplates
+  - buildEvidenceCombinationCohorts
+
+- title: Single-cohort building blocks
+  desc: >
+    The standard template and helpers used internally by the batch builders,
+    also usable directly for one-off cohort variants.
+  contents:
+  - outcomePhenotypeTpl
+  - resolveConceptSetOverlaps
+  - greateDemographicCriteria
+
+- title: Concept set loaders
+  desc: >
+    Load concept sets from Atlas concept-set-export json (directory form) or
+    a single flat file (csv form).
+  contents:
+  - buildMergedConceptSetsByBin
+  - buildCsFromConceptSetCsv
+  - conceptIdsToItems
+  - mergeConceptSets
+  - resolveConceptSet
+  - .phenelopeBinDirs
+
+- title: Atlas integration
+  contents:
+  - insertCohortsIntoAtlas
+  - .authWebApi
