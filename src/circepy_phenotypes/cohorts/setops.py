@@ -56,7 +56,9 @@ def combine_key_sets(
     op: str,
 ) -> object | None:
     """Combine a named subset of key sets by ``"any"`` (union) or ``"all"`` (intersection)."""
-    tables = [key_sets[label] for label in combo if label in key_sets and key_sets[label] is not None]
+    tables = [
+        key_sets[label] for label in combo if label in key_sets and key_sets[label] is not None
+    ]
     if not tables:
         return None
     if len(tables) == 1:

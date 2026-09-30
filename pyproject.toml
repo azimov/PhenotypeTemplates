@@ -3,21 +3,31 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pheno-tpl"
+name = "circepy-phenotypes"
 version = "0.1.0"
-description = "Efficient phenotyping template cohorts via CircePy's Ibis execution layer"
+description = "Efficient phenotyping template cohorts and label-based proxy evaluation via CircePy's Ibis execution layer"
 requires-python = ">=3.10"
 dependencies = [
     "ohdsi-circe-python-alpha>=0.2.0",
     "ibis-framework[duckdb]>=11.0.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
 databricks = ["ibis-framework[databricks]>=11.0.0"]
-dev = ["pytest", "ruff"]
+report = ["pandas", "matplotlib"]
+dev = ["pytest", "ruff", "pre-commit"]
+
+[project.scripts]
+circepy-phenotypes = "circepy_phenotypes.cli:main"
+cpt = "circepy_phenotypes.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["pheno_tpl*"]
+where = ["src"]
+
+[tool.setuptools.package-data]
+circepy_phenotypes = ["py.typed"]
 
 [tool.ruff]
 line-length = 100
@@ -25,3 +35,4 @@ target-version = "py310"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]

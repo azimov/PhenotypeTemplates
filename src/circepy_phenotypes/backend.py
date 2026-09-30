@@ -1,4 +1,4 @@
-"""Backend connections for running the pheno_tpl templating family.
+"""Backend connections for running the circepy-phenotypes templating family.
 
 Provides a uniform ``connect_backend(...)`` helper for DuckDB (local Eunomia
 file) and Databricks (SQL warehouse via YAML config / environment variables), so
@@ -25,7 +25,7 @@ try:
 except ImportError:
     _HAS_IBIS_DATABRICKS = False
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = Path(
     os.environ.get("PHENO_TPL_DB_CONFIG", str(REPO_ROOT / "pheno_tpl_db_config.yaml"))
 )

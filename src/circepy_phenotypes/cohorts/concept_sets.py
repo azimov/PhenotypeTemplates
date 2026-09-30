@@ -1,59 +1,42 @@
-"""Concept-set helpers that mirror the Capr `cs()` / `descendants()` builders.
+"""Concept-set helpers that mirror the Capr ``cs()`` / ``descendants()`` builders.
 
-The Python objects produced here are CircePy `ConceptSet` models that can be
-consumed directly by `circe.cohortdefinition` and the `circe.execution` layer.
+``cs()`` returns a CircePy :class:`ConceptSet` directly, so concept sets can be
+consumed by ``circe.cohortdefinition`` and the ``circe.execution`` layer without
+a parallel spec type.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
 
 from circe.vocabulary import Concept, ConceptSet, ConceptSetExpression, ConceptSetItem
-
-
-@dataclass(frozen=True)
-class ConceptSetSpec:
-    """A Capr-style concept set specification.
-
-    Mirrors `cs(direct_ids, descendants_ids, name = ...)`:
-
-      * ``direct`` -> items with ``include_descendants=False``
-      * ``descendants`` -> items with ``include_descendants=True``
-
-    Concept-set *details* (CONCEPT_NAME etc.) are intentionally not required:
-    CircePy resolves descendants at execution time against the vocabulary
-    tables on the backend.
-    """
-
-    direct: tuple[int, ...] = ()
-    descendants: tuple[int, ...] = ()
-    name: str = ""
 
 
 def cs(
     direct: Iterable[int] = (),
     descendants: Iterable[int] = (),
     name: str = "",
-) -> ConceptSetSpec:
-    """Build a :class:`ConceptSetSpec` (Capr `cs()` equivalent)."""
-    return ConceptSetSpec(tuple(int(x) for x in direct), tuple(int(x) for x in descendants), name)
+    set_id: int = 0,
+) -> ConceptSet:
+    """Build a :class:`ConceptSet` (Capr ``cs()`` equivalent).
 
-
-def make_concept_set(set_id: int, spec: ConceptSetSpec) -> ConceptSet:
-    """Convert a :class:`ConceptSetSpec` into a CircePy :class:`ConceptSet`."""
+    ``direct`` -> items with ``include_descendants=False``; ``descendants`` ->
+    items with ``include_descendants=True``. The ``set_id`` is a placeholder
+    (re-assigned by :func:`resolve_family`); pass a stable id if you manage
+    concept-set ids yourself.
+    """
     items: list[ConceptSetItem] = []
-    for concept_id in spec.direct:
+    for concept_id in direct:
         items.append(
             ConceptSetItem(concept=Concept(concept_id=int(concept_id)), include_descendants=False)
         )
-    for concept_id in spec.descendants:
+    for concept_id in descendants:
         items.append(
             ConceptSetItem(concept=Concept(concept_id=int(concept_id)), include_descendants=True)
         )
     return ConceptSet(
         id=int(set_id),
-        name=spec.name or None,
+        name=name or None,
         expression=ConceptSetExpression(items=items),
     )
 
@@ -94,7 +77,9 @@ def remove_ids(
     keep = [
         item
         for item in cs_obj.expression.items
-        if item.concept is None or item.concept.concept_id is None or int(item.concept.concept_id) not in remove
+        if item.concept is None
+        or item.concept.concept_id is None
+        or int(item.concept.concept_id) not in remove
     ]
     if not keep:
         if warn_on_overlap:
@@ -104,28 +89,16 @@ def remove_ids(
     return cs_obj.model_copy(update={"expression": ConceptSetExpression(items=keep)})
 
 
-def _as_concept_set(cs_obj: ConceptSet | ConceptSetSpec | None, *, label: str = "cs") -> ConceptSet | None:
-    """Normalize a ``ConceptSet`` or ``ConceptSetSpec`` input to a ``ConceptSet``."""
-    if cs_obj is None:
-        return None
-    if isinstance(cs_obj, ConceptSetSpec):
-        return make_concept_set(-1, cs_obj)
-    return cs_obj
-
-
 def resolve_concept_set_overlaps(
-    cs_I: ConceptSet | ConceptSetSpec | None,
-    cs_S: ConceptSet | ConceptSetSpec | None = None,
-    cs_D: ConceptSet | ConceptSetSpec | None = None,
-    cs_T: ConceptSet | ConceptSetSpec | None = None,
-    cs_C: ConceptSet | ConceptSetSpec | None = None,
-    cs_A: ConceptSet | ConceptSetSpec | None = None,
+    cs_I: ConceptSet | None,
+    cs_S: ConceptSet | None = None,
+    cs_D: ConceptSet | None = None,
+    cs_T: ConceptSet | None = None,
+    cs_C: ConceptSet | None = None,
+    cs_A: ConceptSet | None = None,
     warn_on_overlap: bool = True,
 ) -> dict[str, ConceptSet | None]:
     """Resolve overlapping concepts across category concept sets.
-
-    Accepts either :class:`ConceptSet` models or :class:`ConceptSetSpec`
-    (Capr ``cs()``) inputs.
 
     Replicates the R precedence rules:
 
@@ -137,12 +110,6 @@ def resolve_concept_set_overlaps(
     modified; ``D`` and ``T`` are passed through unchanged. Any set reduced to
     zero concepts becomes ``None``.
     """
-    cs_I = _as_concept_set(cs_I, label="cs_I")
-    cs_S = _as_concept_set(cs_S, label="cs_S")
-    cs_D = _as_concept_set(cs_D, label="cs_D")
-    cs_T = _as_concept_set(cs_T, label="cs_T")
-    cs_C = _as_concept_set(cs_C, label="cs_C")
-    cs_A = _as_concept_set(cs_A, label="cs_A")
     if cs_I is None:
         raise ValueError("cs_I (disease of interest) is required")
 

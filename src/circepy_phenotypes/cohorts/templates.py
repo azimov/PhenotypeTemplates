@@ -14,8 +14,8 @@ from dataclasses import dataclass
 
 from circe.cohortdefinition import CohortExpression, InclusionRule
 from circe.cohortdefinition.core import ResultLimit
+from circe.vocabulary import ConceptSet
 
-from .concept_sets import ConceptSet
 from .criteria import (
     combine_criteria,
     condition_occurrence,
@@ -79,7 +79,9 @@ TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
     TemplateSpec("tpl_19", 19, pre_op="all", post_op="all", post_combo=("F", "C"), exclude_a=True),
     TemplateSpec("tpl_20", 20, pre_op="all", post_op="all", post_combo=("T", "C"), exclude_a=True),
     TemplateSpec("tpl_21", 21, pre_op="all", post_op="all", post_combo=("T", "C", "F")),
-    TemplateSpec("tpl_22", 22, pre_op="all", post_op="all", post_combo=("T", "C", "F"), exclude_a=True),
+    TemplateSpec(
+        "tpl_22", 22, pre_op="all", post_op="all", post_combo=("T", "C", "F"), exclude_a=True
+    ),
 )
 
 # Fixed concept-set ids assigned to each category (stable across the family).
@@ -110,11 +112,15 @@ def build_atomic_groups(codeset_ids: dict[str, int]) -> dict[str, object]:
         )
     if cs.get("D") is not None:
         groups["D"] = make_multi_domain_criterion(
-            cs["D"], [measurement, procedure, device_exposure], start_window=event_starts_window(-30, 0)
+            cs["D"],
+            [measurement, procedure, device_exposure],
+            start_window=event_starts_window(-30, 0),
         )
     if cs.get("T") is not None:
         groups["T"] = make_multi_domain_criterion(
-            cs["T"], [drug_exposure, procedure, device_exposure], start_window=event_starts_window(0, 30)
+            cs["T"],
+            [drug_exposure, procedure, device_exposure],
+            start_window=event_starts_window(0, 30),
         )
     if cs.get("C") is not None:
         groups["C"] = make_multi_domain_criterion(
@@ -239,8 +245,10 @@ def build_all_expressions(
             primary_limit=primary_limit,
             era_days=era_days,
         )
-        expression.title = f"[PheTpl] {phenotype_label} tpl {spec.name}" if spec.name != "base_case" else (
-            f"[PheTpl] {phenotype_label} tpl base_case"
+        expression.title = (
+            f"[PheTpl] {phenotype_label} tpl {spec.name}"
+            if spec.name != "base_case"
+            else (f"[PheTpl] {phenotype_label} tpl base_case")
         )
         out[spec.name] = (index, expression)
     return out
